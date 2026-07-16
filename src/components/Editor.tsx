@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   TextField,
@@ -13,18 +13,25 @@ import {
   Paper,
   Typography,
   Slider,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
+import {
+  Undo,
+  Redo,
+  Clear,
+} from '@mui/icons-material';
 import { humanizeText } from '../services/aiService';
 import { HumanizeResponse, ToneType, StyleType, IntensityType } from '../types';
 import ResultDisplay from './ResultDisplay';
 import { useToast } from '../context/ToastContext';
+import { useUndo } from '../hooks/useUndo';
 
 interface EditorProps {
   onHumanize: (result: HumanizeResponse) => void;
 }
 
 const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
-  const [text, setText] = useState('');
   const [tone, setTone] = useState<ToneType>('professional');
   const [style, setStyle] = useState<StyleType>('balanced');
   const [intensity, setIntensity] = useState<IntensityType>('medium');
@@ -32,8 +39,60 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<HumanizeResponse | null>(null);
   
+  // Use Undo/Redo hook for text
+  const {
+    value: text,
+    setValue: setText,
+    setValueImmediate: setTextImmediate,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    clearHistory,
+  } = useUndo<string>('', { maxHistory: 50 });
+  
   // Use Toast hook
   const { showSuccess, showError, showInfo, showLoading, dismissToast } = useToast();
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Z for Undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      }
+      // Ctrl+Shift+Z or Ctrl+Y for Redo
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    if (canUndo) {
+      const previousText = undo();
+      showInfo('Undo ✅');
+      return previousText;
+    }
+  }, [canUndo, undo, showInfo]);
+
+  const handleRedo = useCallback(() => {
+    if (canRedo) {
+      const nextText = redo();
+      showInfo('Redo 🔄');
+      return nextText;
+    }
+  }, [canRedo, redo, showInfo]);
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newText = e.target.value;
+    setText(newText);
+  };
 
   const handleHumanize = async () => {
     if (!text.trim()) {
@@ -45,7 +104,6 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
     setLoading(true);
     setError(null);
 
-    // Show loading toast
     const toastId = showLoading('Humanizing your text...');
 
     try {
@@ -59,7 +117,6 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
       setResult(response);
       onHumanize(response);
       
-      // Dismiss loading toast and show success
       dismissToast(toastId);
       showSuccess('Text humanized successfully! 🎉');
       
@@ -74,10 +131,11 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
   };
 
   const handleClear = () => {
-    setText('');
+    setTextImmediate('');
+    clearHistory();
     setResult(null);
     setError(null);
-    showInfo('Cleared all text');
+    showInfo('Cleared all text 🗑️');
   };
 
   const handleCopy = async () => {
@@ -104,12 +162,53 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
   return (
     <Box sx={{ maxWidth: 1200, mx: 'auto', p: 3 }}>
       <Paper elevation={3} sx={{ p: 4 }}>
-        <Typography variant="h5" gutterBottom>
-          AI Text Humanizer
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Transform AI-generated text into natural, human-like content
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box>
+            <Typography variant="h5" gutterBottom>
+              AI Text Humanizer
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Transform AI-generated text into natural, human-like content
+            </Typography>
+          </Box>
+          
+          {/* Undo/Redo Controls */}
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Tooltip title={`Undo (Ctrl+Z)${!canUndo ? ' - No actions to undo' : ''}`}>
+              <span>
+                <IconButton 
+                  onClick={handleUndo} 
+                  disabled={!canUndo || loading}
+                  color="primary"
+                >
+                  <Undo />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title={`Redo (Ctrl+Y)${!canRedo ? ' - No actions to redo' : ''}`}>
+              <span>
+                <IconButton 
+                  onClick={handleRedo} 
+                  disabled={!canRedo || loading}
+                  color="primary"
+                >
+                  <Redo />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Clear text">
+              <span>
+                <IconButton 
+                  onClick={handleClear} 
+                  disabled={!text || loading}
+                  color="error"
+                >
+                  <Clear />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Box>
+        </Box>
 
         {/* Input area */}
         <TextField
@@ -119,9 +218,20 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
           variant="outlined"
           placeholder="Paste your AI-generated text here..."
           value={text}
-          onChange={(e) => setText(e.target.value)}
-          sx={{ mb: 3 }}
+          onChange={handleTextChange}
+          sx={{ mb: 2 }}
+          disabled={loading}
         />
+
+        {/* Undo/Redo status bar */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+          <Typography variant="caption" color="text.secondary">
+            {text ? `${text.split(/\s+/).filter(w => w).length} words, ${text.length} characters` : 'No text entered'}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {canUndo || canRedo ? `History: ${canUndo ? '↩️' : ''} ${canRedo ? '↪️' : ''}` : ''}
+          </Typography>
+        </Box>
 
         {/* Controls */}
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }}>
@@ -131,6 +241,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
               value={tone}
               onChange={(e) => handleToneChange(e.target.value as ToneType)}
               label="Tone"
+              disabled={loading}
             >
               <MenuItem value="professional">Professional</MenuItem>
               <MenuItem value="casual">Casual</MenuItem>
@@ -145,6 +256,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
               value={style}
               onChange={(e) => setStyle(e.target.value as StyleType)}
               label="Style"
+              disabled={loading}
             >
               <MenuItem value="concise">Concise</MenuItem>
               <MenuItem value="balanced">Balanced</MenuItem>
@@ -158,6 +270,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
               value={intensity}
               onChange={(e) => handleIntensityChange(e.target.value as IntensityType)}
               label="Intensity"
+              disabled={loading}
             >
               <MenuItem value="light">Light</MenuItem>
               <MenuItem value="medium">Medium</MenuItem>
@@ -181,6 +294,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
             min={1}
             max={3}
             step={1}
+            disabled={loading}
             marks={[
               { value: 1, label: 'Light' },
               { value: 2, label: 'Medium' },
@@ -190,7 +304,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
         </Box>
 
         {/* Action buttons */}
-        <Stack direction="row" spacing={2}>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <Button
             variant="contained"
             onClick={handleHumanize}
@@ -202,7 +316,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
           <Button
             variant="outlined"
             onClick={handleClear}
-            disabled={loading}
+            disabled={loading || !text}
           >
             Clear
           </Button>
@@ -216,7 +330,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
               Copy Result
             </Button>
           )}
-        </Stack>
+        </Box>
 
         {/* Error message */}
         {error && (
