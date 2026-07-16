@@ -1,12 +1,11 @@
-// src/App.tsx
-
 import React from 'react';
 import { ThemeProvider } from '@mui/material/styles';
-import { CssBaseline, Container, Box, Typography } from '@mui/material'; // Added Typography
+import { CssBaseline, Container, Box, Typography } from '@mui/material';
 import Header from './components/Header';
 import Editor from './components/Editor';
 import { theme } from './styles/theme';
 import { HumanizeResponse } from './types';
+import { ToastProvider } from './context/ToastContext';
 import './App.css';
 
 function App() {
@@ -17,28 +16,30 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        <Header />
-        <Container component="main" sx={{ flex: 1, py: 4 }}>
-          <Editor onHumanize={handleHumanize} />
-        </Container>
-        <Box 
-          component="footer" 
-          sx={{ 
-            py: 3, 
-            textAlign: 'center',
-            backgroundColor: 'background.paper',
-            borderTop: 1,
-            borderColor: 'divider',
-          }}
-        >
-          <Container maxWidth="lg">
-            <Typography variant="body2" color="text.secondary">
-              AI Humanizer - Transform AI text into human-like content
-            </Typography>
+      <ToastProvider>
+        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+          <Header />
+          <Container component="main" sx={{ flex: 1, py: 4 }}>
+            <Editor onHumanize={handleHumanize} />
           </Container>
+          <Box 
+            component="footer" 
+            sx={{ 
+              py: 3, 
+              textAlign: 'center',
+              backgroundColor: 'background.paper',
+              borderTop: 1,
+              borderColor: 'divider',
+            }}
+          >
+            <Container maxWidth="lg">
+              <Typography variant="body2" color="text.secondary">
+                AI Humanizer - Transform AI text into human-like content
+              </Typography>
+            </Container>
+          </Box>
         </Box>
-      </Box>
+      </ToastProvider>
     </ThemeProvider>
   );
 }

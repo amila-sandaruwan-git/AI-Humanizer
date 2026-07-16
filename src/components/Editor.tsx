@@ -17,6 +17,7 @@ import {
 import { humanizeText } from '../services/aiService';
 import { HumanizeResponse, ToneType, StyleType, IntensityType } from '../types';
 import ResultDisplay from './ResultDisplay';
+import { useToast } from '../context/ToastContext';
 
 interface EditorProps {
   onHumanize: (result: HumanizeResponse) => void;
@@ -30,15 +31,22 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<HumanizeResponse | null>(null);
+  
+  // Use Toast hook
+  const { showSuccess, showError, showInfo, showLoading, dismissToast } = useToast();
 
   const handleHumanize = async () => {
     if (!text.trim()) {
       setError('Please enter some text to humanize');
+      showError('Please enter some text to humanize');
       return;
     }
 
     setLoading(true);
     setError(null);
+
+    // Show loading toast
+    const toastId = showLoading('Humanizing your text...');
 
     try {
       const response = await humanizeText({
@@ -50,8 +58,15 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
       
       setResult(response);
       onHumanize(response);
+      
+      // Dismiss loading toast and show success
+      dismissToast(toastId);
+      showSuccess('Text humanized successfully! 🎉');
+      
     } catch (err) {
+      dismissToast(toastId);
       setError('Failed to humanize text. Please try again.');
+      showError('Failed to humanize text. Please try again.');
       console.error(err);
     } finally {
       setLoading(false);
@@ -62,6 +77,28 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
     setText('');
     setResult(null);
     setError(null);
+    showInfo('Cleared all text');
+  };
+
+  const handleCopy = async () => {
+    if (result) {
+      try {
+        await navigator.clipboard.writeText(result.humanized);
+        showSuccess('Copied to clipboard! 📋');
+      } catch (err) {
+        showError('Failed to copy text');
+      }
+    }
+  };
+
+  const handleToneChange = (value: ToneType) => {
+    setTone(value);
+    showInfo(`Tone changed to: ${value.charAt(0).toUpperCase() + value.slice(1)}`);
+  };
+
+  const handleIntensityChange = (value: IntensityType) => {
+    setIntensity(value);
+    showInfo(`Intensity changed to: ${value.charAt(0).toUpperCase() + value.slice(1)}`);
   };
 
   return (
@@ -92,7 +129,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
             <InputLabel>Tone</InputLabel>
             <Select
               value={tone}
-              onChange={(e) => setTone(e.target.value as ToneType)}
+              onChange={(e) => handleToneChange(e.target.value as ToneType)}
               label="Tone"
             >
               <MenuItem value="professional">Professional</MenuItem>
@@ -119,7 +156,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
             <InputLabel>Intensity</InputLabel>
             <Select
               value={intensity}
-              onChange={(e) => setIntensity(e.target.value as IntensityType)}
+              onChange={(e) => handleIntensityChange(e.target.value as IntensityType)}
               label="Intensity"
             >
               <MenuItem value="light">Light</MenuItem>
@@ -138,7 +175,8 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
             value={intensity === 'light' ? 1 : intensity === 'medium' ? 2 : 3}
             onChange={(_, value) => {
               const levels: IntensityType[] = ['light', 'medium', 'heavy'];
-              setIntensity(levels[value as number - 1]);
+              const newIntensity = levels[value as number - 1];
+              handleIntensityChange(newIntensity);
             }}
             min={1}
             max={3}
@@ -168,6 +206,16 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
           >
             Clear
           </Button>
+          {result && (
+            <Button
+              variant="outlined"
+              color="success"
+              onClick={handleCopy}
+              disabled={loading}
+            >
+              Copy Result
+            </Button>
+          )}
         </Stack>
 
         {/* Error message */}
@@ -180,7 +228,10 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
         {/* Result display */}
         {result && (
           <Box sx={{ mt: 4 }}>
-            <ResultDisplay result={result} />
+            <ResultDisplay 
+              result={result} 
+              onCopy={handleCopy} 
+            />
           </Box>
         )}
       </Paper>

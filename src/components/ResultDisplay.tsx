@@ -15,24 +15,65 @@ import {
 import {
   ContentCopy,
   CheckCircle,
-  BarChart,
+  Download,
+  Share,
 } from '@mui/icons-material';
 import { HumanizeResponse } from '../types';
+import { useToast } from '../context/ToastContext';
 
 interface ResultDisplayProps {
   result: HumanizeResponse;
+  onCopy?: () => void;
 }
 
-const ResultDisplay: React.FC<ResultDisplayProps> = ({ result }) => {
+const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, onCopy }) => {
   const [copied, setCopied] = useState(false);
+  const { showSuccess, showError, showInfo } = useToast();
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(result.humanized);
       setCopied(true);
+      showSuccess('Copied to clipboard! 📋');
       setTimeout(() => setCopied(false), 2000);
+      if (onCopy) onCopy();
     } catch (err) {
       console.error('Failed to copy:', err);
+      showError('Failed to copy text');
+    }
+  };
+
+  const handleDownload = () => {
+    try {
+      const blob = new Blob([result.humanized], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'humanized_text.txt';
+      a.click();
+      URL.revokeObjectURL(url);
+      showSuccess('File downloaded successfully! 📥');
+    } catch (err) {
+      showError('Failed to download file');
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Humanized Text',
+          text: result.humanized,
+        });
+        showSuccess('Shared successfully!');
+      } else {
+        await navigator.clipboard.writeText(result.humanized);
+        showInfo('Text copied to clipboard! You can share it now.');
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        showError('Failed to share');
+      }
     }
   };
 
@@ -50,6 +91,13 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result }) => {
 
   const similarityScore = calculateSimilarity();
 
+  // Determine color based on similarity
+  const getSimilarityColor = (score: number): 'success' | 'warning' | 'error' => {
+    if (score <= 40) return 'success';
+    if (score <= 60) return 'warning';
+    return 'error';
+  };
+
   return (
     <Box sx={{ mt: 4 }}>
       <Paper elevation={2} sx={{ p: 3 }}>
@@ -66,15 +114,24 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result }) => {
             Humanized Result
           </Typography>
           <Stack direction="row" spacing={1}>
-            <Chip
-              icon={<BarChart />}
+            <Chip 
               label={`${similarityScore}% similar`}
-              color={similarityScore > 70 ? 'success' : similarityScore > 40 ? 'warning' : 'error'}
+              color={getSimilarityColor(similarityScore)}
               size="small"
             />
             <Tooltip title={copied ? 'Copied!' : 'Copy to clipboard'}>
               <IconButton onClick={handleCopy} color={copied ? 'success' : 'primary'}>
                 {copied ? <CheckCircle /> : <ContentCopy />}
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Download as TXT">
+              <IconButton onClick={handleDownload} color="info">
+                <Download />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Share">
+              <IconButton onClick={handleShare} color="secondary">
+                <Share />
               </IconButton>
             </Tooltip>
           </Stack>
@@ -136,6 +193,11 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result }) => {
               <Chip 
                 label={`${result.changes.wordsChanged} words changed`}
                 color="info"
+                size="small"
+              />
+              <Chip 
+                label={`${result.wordCount.original} → ${result.wordCount.humanized} words`}
+                color="default"
                 size="small"
               />
             </Stack>
