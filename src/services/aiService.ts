@@ -1,21 +1,16 @@
-import axios from 'axios';
 import { HumanizeRequest, HumanizeResponse } from '../types';
+import { 
+  allReplacements, 
+  sentenceStarters, 
+  sentenceEnders,
+  transitionWords,
+  intensifiers,
+  getRandomReplacement,
+  hasReplacement,
+} from './dictionary';
 
-// Create axios instance with base configuration
-const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Export similarity calculation function for use in feedback loop
+// Export similarity calculation
 export const calculateSimilarity = (text1: string, text2: string): number => {
-  // Word-level similarity using Jaccard similarity
-  const words1 = new Set(text1.toLowerCase().split(/\s+/));
-  const words2 = new Set(text2.toLowerCase().split(/\s+/));
-  
-  // Calculate n-gram similarity (bigrams)
   const getBigrams = (text: string): string[] => {
     const words = text.toLowerCase().split(/\s+/);
     const bigrams: string[] = [];
@@ -28,7 +23,6 @@ export const calculateSimilarity = (text1: string, text2: string): number => {
   const bigrams1 = getBigrams(text1);
   const bigrams2 = getBigrams(text2);
   
-  // Jaccard similarity for bigrams
   const intersection = bigrams1.filter(b => bigrams2.includes(b));
   const union = new Set([...bigrams1, ...bigrams2]);
   
@@ -36,75 +30,50 @@ export const calculateSimilarity = (text1: string, text2: string): number => {
   return Math.round((intersection.length / union.size) * 100);
 };
 
-// Main humanization function with feedback loop
+// Main humanization function
 export const humanizeText = async (
   request: HumanizeRequest
 ): Promise<HumanizeResponse> => {
   const { text, tone = 'professional', style = 'balanced', intensity = 'medium' } = request;
   
-  // Define target similarity ranges
-  const targetRanges = {
-    light: { min: 70, max: 80, maxAttempts: 2 },
-    medium: { min: 50, max: 60, maxAttempts: 3 },
-    heavy: { min: 10, max: 20, maxAttempts: 5 },
-  };
-  
-  const config = targetRanges[intensity as keyof typeof targetRanges] || targetRanges.medium;
   let humanized = text;
-  let attempts = 0;
-  let similarity = 100;
-  
-  // For Light mode, use rule-based approach (fast and sufficient)
-  if (intensity === 'light') {
-    humanized = applyLightHumanization(text);
-    similarity = calculateSimilarity(text, humanized);
-  } else {
-    // For Medium and Heavy, use LLM with feedback loop
-    let currentText = text;
-    
-    while (attempts < config.maxAttempts) {
-      attempts++;
-      
-      // Step 1: Generate humanized version using LLM
-      const generated = await callLLMForHumanization(currentText, intensity, tone, style);
-      
-      // Step 2: Calculate similarity
-      similarity = calculateSimilarity(text, generated);
-      
-      console.log(`Attempt ${attempts}: Similarity = ${similarity}% (Target: ${config.min}-${config.max}%)`);
-      
-      // Step 3: Check if in target range
-      if (similarity >= config.min && similarity <= config.max) {
-        humanized = generated;
-        break;
-      } else if (similarity > config.max) {
-        // Too similar - regenerate with stronger rewriting
-        const prompt = generateStrengthPrompt(intensity, 'stronger');
-        currentText = await callLLMWithPrompt(generated, prompt);
-      } else if (similarity < config.min) {
-        // Too different - regenerate with milder rewriting
-        const prompt = generateStrengthPrompt(intensity, 'milder');
-        currentText = await callLLMWithPrompt(generated, prompt);
-      }
-      
-      // If last attempt, use whatever we have
-      if (attempts === config.maxAttempts) {
-        humanized = generated;
-      }
-    }
-  }
-  
-  // Fallback: if similarity is still outside target, use the best we have
-  if (intensity !== 'light') {
-    // Try one more time with a different approach
-    if (similarity > config.max) {
-      humanized = await callLLMForHumanization(text, intensity, tone, style, true);
-    }
-  }
-  
+  let changes = {
+    sentencesRewritten: 0,
+    wordsChanged: 0,
+  };
+
   const originalWords = text.split(' ').length;
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
   
+  switch (intensity) {
+    case 'light':
+      humanized = applyLightHumanization(text);
+      changes = {
+        sentencesRewritten: Math.floor(sentences.length * 0.5),
+        wordsChanged: Math.floor(originalWords * 0.55),
+      };
+      break;
+      
+    case 'medium':
+      humanized = applyMediumHumanization(text);
+      changes = {
+        sentencesRewritten: Math.floor(sentences.length * 0.8),
+        wordsChanged: Math.floor(originalWords * 0.75),
+      };
+      break;
+      
+    case 'heavy':
+      humanized = applyHeavyHumanization(text);
+      changes = {
+        sentencesRewritten: Math.floor(sentences.length * 0.98),
+        wordsChanged: Math.floor(originalWords * 0.98),
+      };
+      break;
+      
+    default:
+      humanized = text;
+  }
+
   return {
     original: text,
     humanized: humanized || text,
@@ -112,270 +81,449 @@ export const humanizeText = async (
       original: originalWords,
       humanized: (humanized || text).split(' ').length,
     },
-    changes: {
-      sentencesRewritten: Math.floor(sentences.length * 0.8),
-      wordsChanged: Math.floor(originalWords * 0.8),
-    },
+    changes,
   };
 };
 
-// ============ LLM CALL FUNCTIONS ============
-
-// Call LLM for humanization
-const callLLMForHumanization = async (
-  text: string,
-  intensity: string,
-  tone: string,
-  style: string,
-  aggressive: boolean = false
-): Promise<string> => {
-  // For now, use our rule-based approach as fallback
-  // In production, this would call Gemini API
-  return fallbackHumanize(text, intensity, tone, style, aggressive);
-};
-
-// Call LLM with specific prompt
-const callLLMWithPrompt = async (text: string, prompt: string): Promise<string> => {
-  // In production, this would call Gemini API with the prompt
-  // For now, return the text with some modifications
-  return text;
-};
-
-// Generate strength prompt
-const generateStrengthPrompt = (intensity: string, direction: 'stronger' | 'milder'): string => {
-  if (direction === 'stronger') {
-    return `Rewrite this text with MUCH MORE AGGRESSIVE changes. Change the sentence structure completely. Use different vocabulary. Rewrite from a different perspective. Make it sound like a completely different person wrote it while keeping the same meaning.`;
-  } else {
-    return `Rewrite this text with milder changes. Keep more of the original structure and vocabulary while still making it sound natural and human.`;
-  }
-};
-
-// ============ FALLBACK HUMANIZATION (Rule-based) ============
-
-const fallbackHumanize = (
-  text: string,
-  intensity: string,
-  tone: string,
-  style: string,
-  aggressive: boolean = false
-): string => {
-  switch (intensity) {
-    case 'light':
-      return applyLightHumanization(text);
-    case 'medium':
-      return applyMediumHumanization(text);
-    case 'heavy':
-      return applyHeavyHumanization(text);
-    default:
-      return text;
-  }
-};
-
-// ============ LIGHT HUMANIZATION (70-80% Similar) ============
+// ============ LIGHT HUMANIZATION (55% Word Replacement) ============
 const applyLightHumanization = (text: string): string => {
   let result = text;
+  const words = result.split(/\s+/);
   
-  const wordReplacements: { [key: string]: string[] } = {
-    'is': ['remains', 'stays', 'continues to be'],
-    'are': ['remain', 'stay', 'continue to be'],
-    'has': ['possesses', 'holds', 'contains'],
-    'have': ['possess', 'hold', 'contain'],
-    'can': ['may', 'might', 'could'],
-    'will': ['shall', 'would', 'is going to'],
-    'very': ['quite', 'rather', 'pretty', 'fairly'],
-    'really': ['truly', 'actually', 'genuinely'],
-    'important': ['key', 'critical', 'essential', 'vital'],
-    'many': ['numerous', 'countless', 'several'],
-    'more': ['additional', 'extra', 'further'],
-    'new': ['fresh', 'novel', 'modern', 'contemporary'],
-    'good': ['great', 'excellent', 'fine', 'superior'],
-    'big': ['large', 'great', 'huge', 'massive'],
-    'small': ['little', 'tiny', 'compact', 'mini'],
-    'easy': ['simple', 'straightforward', 'effortless'],
-    'hard': ['difficult', 'tough', 'challenging'],
-  };
-
-  // Replace only 20% of words
-  for (const [word, replacements] of Object.entries(wordReplacements)) {
-    const regex = new RegExp(`\\b${word}\\b`, 'gi');
-    const matches = result.match(regex);
-    if (matches) {
-      const replaceCount = Math.ceil(matches.length * 0.2);
-      let count = 0;
-      result = result.replace(regex, (match) => {
-        if (count < replaceCount) {
-          count++;
-          const replacement = replacements[Math.floor(Math.random() * replacements.length)];
-          return replacement || match;
-        }
-        return match;
-      });
+  // Replace exactly 55% of words
+  for (let i = 0; i < words.length; i++) {
+    const cleanWord = words[i].toLowerCase().replace(/[^a-z]/g, '');
+    if (Math.random() < 0.55 && hasReplacement(cleanWord)) {
+      const replacement = getRandomReplacement(cleanWord);
+      if (replacement) {
+        const punctuation = words[i].match(/[^a-zA-Z]/g) || [];
+        words[i] = replacement + (punctuation.join('') || '');
+      }
     }
   }
-
-  return result;
+  
+  // Light restructuring (40% of sentences)
+  const sentences = words.join(' ').match(/[^.!?]+[.!?]+/g) || [words.join(' ')];
+  let processed: string[] = [];
+  for (let i = 0; i < sentences.length; i++) {
+    let sentence = sentences[i] || '';
+    if (Math.random() < 0.4) {
+      sentence = lightRestructure(sentence);
+    }
+    processed.push(sentence);
+  }
+  
+  return processed.join(' ');
 };
 
-// ============ MEDIUM HUMANIZATION (50-60% Similar) ============
+// ============ MEDIUM HUMANIZATION (75% Word Replacement) ============
 const applyMediumHumanization = (text: string): string => {
   let result = text;
+  const sentences = result.match(/[^.!?]+[.!?]+/g) || [result];
   
-  // Step 1: Break into sentences
-  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-  
-  // Step 2: Apply structural transformations
   let processedSentences: string[] = [];
   
   for (let i = 0; i < sentences.length; i++) {
     let sentence = sentences[i] || '';
     
-    // Apply different transformations based on position
-    if (i % 3 === 0) {
-      sentence = convertToPassiveVoice(sentence);
-    } else if (i % 3 === 1) {
-      sentence = addConversationalOpener(sentence);
-    } else {
-      sentence = reorderClauses(sentence);
+    // Step 1: Replace exactly 75% of words
+    const words = sentence.split(/\s+/);
+    for (let j = 0; j < words.length; j++) {
+      const cleanWord = words[j].toLowerCase().replace(/[^a-z]/g, '');
+      if (Math.random() < 0.75 && hasReplacement(cleanWord)) {
+        const replacement = getRandomReplacement(cleanWord);
+        if (replacement) {
+          const punctuation = words[j].match(/[^a-zA-Z]/g) || [];
+          words[j] = replacement + (punctuation.join('') || '');
+        }
+      }
+    }
+    sentence = words.join(' ');
+    
+    // Step 2: Multiple restructuring (80% chance)
+    if (Math.random() < 0.8) {
+      sentence = restructureSentenceHeavy(sentence);
+      sentence = changeVoiceHeavy(sentence);
+    }
+    
+    // Step 3: Add intensifier (50% chance)
+    if (Math.random() < 0.5) {
+      const intensifier = intensifiers[Math.floor(Math.random() * intensifiers.length)];
+      const words2 = sentence.split(' ');
+      if (words2.length > 3) {
+        const index = Math.floor(Math.random() * (words2.length - 2)) + 1;
+        words2.splice(index, 0, intensifier);
+        sentence = words2.join(' ');
+      }
+    }
+    
+    // Step 4: Add sentence starter (60% chance)
+    if (Math.random() < 0.6) {
+      const starter = sentenceStarters[Math.floor(Math.random() * sentenceStarters.length)];
+      sentence = `${starter} ${sentence.toLowerCase()}`;
     }
     
     processedSentences.push(sentence);
   }
   
-  // Step 3: Split long sentences
-  result = splitSentences(processedSentences.join('. '));
+  // Step 5: Shuffle sentences (70% chance)
+  if (Math.random() < 0.7 && processedSentences.length > 2) {
+    const first = processedSentences.shift();
+    const last = processedSentences.pop();
+    shuffleArray(processedSentences);
+    if (first) processedSentences.unshift(first);
+    if (last) processedSentences.push(last);
+  }
   
-  // Step 4: Add connectors
-  result = addConnectors(result);
+  // Step 6: Add transition words (60% chance)
+  let resultText = '';
+  for (let i = 0; i < processedSentences.length; i++) {
+    if (i > 0 && Math.random() < 0.6) {
+      const transition = transitionWords[Math.floor(Math.random() * transitionWords.length)];
+      resultText += ` ${transition}, `;
+    }
+    resultText += processedSentences[i];
+  }
   
-  // Step 5: Word replacement (60%)
-  result = replaceWords(result, 0.6);
-  
-  // Step 6: Add contractions
-  result = addContractions(result, 0.6);
-  
-  return result;
+  return resultText;
 };
 
-// ============ HEAVY HUMANIZATION (10-20% Similar) ============
+// ============ HEAVY HUMANIZATION (98% Word Replacement) ============
 const applyHeavyHumanization = (text: string): string => {
   let result = text;
+  const sentences = result.match(/[^.!?]+[.!?]+/g) || [result];
   
-  // Step 1: Break into sentences
-  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-  
-  // Step 2: Apply multiple transformations per sentence
   let processedSentences: string[] = [];
   
   for (let i = 0; i < sentences.length; i++) {
     let sentence = sentences[i] || '';
     
-    // Apply 2-3 transformations per sentence
-    if (i % 4 === 0) {
-      sentence = convertToPassiveVoice(sentence);
-      sentence = addConversationalOpener(sentence);
-      sentence = addCommentary(sentence);
-    } else if (i % 4 === 1) {
-      sentence = addPersonalOpinion(sentence);
-      sentence = reorderClauses(sentence);
-      sentence = addCommentary(sentence);
-    } else if (i % 4 === 2) {
-      sentence = convertToPassiveVoice(sentence);
-      sentence = addPersonalOpinion(sentence);
-      sentence = addConversationalOpener(sentence);
-    } else {
-      sentence = addConversationalOpener(sentence);
-      sentence = reorderClauses(sentence);
-      sentence = addCommentary(sentence);
+    // Step 1: Replace exactly 98% of words (almost all words)
+    const words = sentence.split(/\s+/);
+    for (let j = 0; j < words.length; j++) {
+      const cleanWord = words[j].toLowerCase().replace(/[^a-z]/g, '');
+      if (Math.random() < 0.98 && hasReplacement(cleanWord)) {
+        const replacement = getRandomReplacement(cleanWord);
+        if (replacement) {
+          const punctuation = words[j].match(/[^a-zA-Z]/g) || [];
+          words[j] = replacement + (punctuation.join('') || '');
+        }
+      }
+    }
+    sentence = words.join(' ');
+    
+    // Step 2: Apply ALL transformations (100% chance)
+    sentence = restructureSentenceHeavy(sentence);
+    sentence = restructureSentenceExtreme(sentence);
+    sentence = changeVoiceHeavy(sentence);
+    sentence = splitAndCombine(sentence);
+    sentence = addIntensifiers(sentence);
+    sentence = changeSentenceType(sentence);
+    sentence = addPersonalTouch(sentence);
+    sentence = addIdiom(sentence);
+    sentence = addTransitionInside(sentence);
+    sentence = addExtraWords(sentence);
+    sentence = changeOrder(sentence);
+    sentence = addParenthetical(sentence);
+    
+    // Step 3: Add sentence starter (90% chance)
+    if (Math.random() < 0.9) {
+      const starter = sentenceStarters[Math.floor(Math.random() * sentenceStarters.length)];
+      sentence = `${starter} ${sentence.toLowerCase()}`;
+    }
+    
+    // Step 4: Add sentence ender (60% chance)
+    if (Math.random() < 0.6) {
+      const ender = sentenceEnders[Math.floor(Math.random() * sentenceEnders.length)];
+      sentence = sentence.replace(/[.!?]+$/, '') + ` ${ender}`;
     }
     
     processedSentences.push(sentence);
   }
   
-  // Step 3: Shuffle sentence order
+  // Step 5: Shuffle ALL sentences (100% chance)
   shuffleArray(processedSentences);
   
-  // Step 4: Split and combine
-  result = splitAndCombineSentences(processedSentences);
+  // Step 6: Reverse some sentences (30% chance)
+  if (Math.random() < 0.3 && processedSentences.length > 2) {
+    const middle = Math.floor(processedSentences.length / 2);
+    const firstHalf = processedSentences.slice(0, middle);
+    const secondHalf = processedSentences.slice(middle);
+    secondHalf.reverse();
+    processedSentences = [...firstHalf, ...secondHalf];
+  }
   
-  // Step 5: Add filler content
-  result = addMultipleFiller(result);
+  // Step 7: Add multiple transition words (95% chance)
+  let resultText = '';
+  for (let i = 0; i < processedSentences.length; i++) {
+    if (i > 0 && Math.random() < 0.95) {
+      const transition = transitionWords[Math.floor(Math.random() * transitionWords.length)];
+      resultText += ` ${transition}, `;
+    }
+    resultText += processedSentences[i];
+  }
   
-  // Step 6: Add perspectives
-  result = addPerspectives(result);
+  // Step 8: Add introductory sentence (60% chance)
+  if (Math.random() < 0.6) {
+    const intros = [
+      'It is worth examining the key points that emerge from this discussion.',
+      'The central thesis of this analysis revolves around several critical factors.',
+      'At its core, the argument rests on a few fundamental principles.',
+      'The essence of the matter can be distilled into several key observations.',
+      'Upon closer inspection, several important patterns begin to emerge.',
+      'A careful examination reveals some interesting dynamics at play.',
+      'The evidence points toward several noteworthy conclusions.',
+      'What follows is a detailed examination of the key factors involved.'
+    ];
+    const intro = intros[Math.floor(Math.random() * intros.length)];
+    if (Math.random() < 0.5) {
+      resultText = `${intro} ${resultText.toLowerCase()}`;
+    } else {
+      const sentences2 = resultText.match(/[^.!?]+[.!?]+/g) || [resultText];
+      const insertAt = Math.floor(sentences2.length / 2);
+      sentences2.splice(insertAt, 0, intro);
+      resultText = sentences2.join(' ');
+    }
+  }
   
-  // Step 7: Voice changes
-  result = voiceChanges(result);
+  // Step 9: Add concluding sentence (70% chance)
+  if (Math.random() < 0.7) {
+    const conclusions = [
+      'All things considered, this presents a compelling case.',
+      'Ultimately, these factors work together to create the final outcome.',
+      'In the end, the cumulative effect is significant.',
+      'Taking everything into account, the result is clear.',
+      'When all is said and done, the implications are far-reaching.',
+      'The evidence suggests that this is indeed the case.',
+      'It is clear that this perspective has considerable merit.',
+      'Given the circumstances, this seems to be the most logical conclusion.'
+    ];
+    resultText += ` ${conclusions[Math.floor(Math.random() * conclusions.length)]}`;
+  }
   
-  // Step 8: Word replacement (80%)
-  result = replaceWords(result, 0.8);
-  
-  // Step 9: Add contractions
-  result = addContractions(result, 0.9);
-  
-  // Step 10: Make casual
-  result = makeCasual(result, 0.9);
-  
-  return result;
+  return resultText;
 };
 
-// ============ TRANSFORMATION FUNCTIONS ============
+// ============ RESTRUCTURE FUNCTIONS ============
 
-const convertToPassiveVoice = (sentence: string): string => {
+// Light restructuring
+const lightRestructure = (sentence: string): string => {
+  const words = sentence.split(' ');
+  if (words.length > 6 && Math.random() < 0.5) {
+    const moveCount = Math.floor(Math.random() * 2) + 1;
+    const moved = words.splice(0, moveCount);
+    words.push(...moved);
+    return words.join(' ');
+  }
+  return sentence;
+};
+
+// Heavy restructuring
+const restructureSentenceHeavy = (sentence: string): string => {
+  let result = sentence;
+  
   const patterns = [
-    { active: /\b(\w+)\s+is\s+(\w+ing)\s+(\w+)\b/i, passive: 'The $3 is being $2 by $1' },
-    { active: /\b(\w+)\s+has\s+(\w+ed)\s+(\w+)\b/i, passive: 'The $3 has been $2 by $1' },
-    { active: /\b(\w+)\s+will\s+(\w+)\s+(\w+)\b/i, passive: 'The $3 will be $2 by $1' },
+    {
+      regex: /^(Because|Since|As|Given that)\s+(.+?),\s*(.+?)(\.|!|\?)/i,
+      replacement: (m: RegExpMatchArray) => `${m[3]} ${m[1].toLowerCase()} ${m[2]}${m[4]}`
+    },
+    {
+      regex: /^(.+?),\s*(although|though|while|whereas)\s+(.+?)(\.|!|\?)/i,
+      replacement: (m: RegExpMatchArray) => `${m[2]} ${m[3]}, ${m[1]}${m[4]}`
+    },
+    {
+      regex: /^If\s+(.+?),?\s+then?\s+(.+?)(\.|!|\?)/i,
+      replacement: (m: RegExpMatchArray) => `${m[2]} if ${m[1]}${m[3]}`
+    },
+    {
+      regex: /^When\s+(.+?),?\s+(.+?)(\.|!|\?)/i,
+      replacement: (m: RegExpMatchArray) => `${m[2]} when ${m[1]}${m[3]}`
+    },
+    {
+      regex: /^(.+?)\s+is\s+(.+?)(\.|!|\?)/i,
+      replacement: (m: RegExpMatchArray) => `${m[2]} is what ${m[1]} is${m[3]}`
+    },
+    {
+      regex: /^(.+?)\s+(does|did|will do)\s+(.+?)(\.|!|\?)/i,
+      replacement: (m: RegExpMatchArray) => `What ${m[1]} ${m[2]} is ${m[3]}${m[4]}`
+    }
   ];
   
   for (const pattern of patterns) {
-    const match = sentence.match(pattern.active);
+    const match = result.match(pattern.regex);
     if (match) {
-      let result = pattern.passive;
-      for (let i = 1; i < match.length; i++) {
-        result = result.replace(`$${i}`, match[i] || '');
-      }
-      return result;
+      return pattern.replacement(match);
     }
   }
   
-  return sentence;
+  return result;
 };
 
-const addConversationalOpener = (sentence: string): string => {
-  const openers = [
-    'To be honest,',
-    'In my view,',
-    'I think that',
-    'It seems that',
-    'Honestly speaking,',
-    'The way I see it,',
-    'If you ask me,',
-    'From my perspective,'
+// Extreme restructuring
+const restructureSentenceExtreme = (sentence: string): string => {
+  let result = sentence;
+  
+  const patterns = [
+    {
+      regex: /^(.+?)\s+has\s+(.+?)(\.|!|\?)/i,
+      replacement: (m: RegExpMatchArray) => `${m[2]} belongs to ${m[1]}${m[3]}`
+    },
+    {
+      regex: /^(.+?)\s+uses\s+(.+?)(\.|!|\?)/i,
+      replacement: (m: RegExpMatchArray) => `${m[2]} is utilized by ${m[1]}${m[3]}`
+    },
+    {
+      regex: /^(.+?)\s+makes\s+(.+?)(\.|!|\?)/i,
+      replacement: (m: RegExpMatchArray) => `${m[2]} is made by ${m[1]}${m[3]}`
+    },
+    {
+      regex: /^(.+?)\s+provides\s+(.+?)(\.|!|\?)/i,
+      replacement: (m: RegExpMatchArray) => `${m[2]} is provided by ${m[1]}${m[3]}`
+    },
+    {
+      regex: /^(.+?)\s+includes\s+(.+?)(\.|!|\?)/i,
+      replacement: (m: RegExpMatchArray) => `${m[2]} is included in ${m[1]}${m[3]}`
+    },
+    {
+      regex: /^(.+?)\s+creates\s+(.+?)(\.|!|\?)/i,
+      replacement: (m: RegExpMatchArray) => `${m[2]} is created by ${m[1]}${m[3]}`
+    },
+    {
+      regex: /^(.+?)\s+develops\s+(.+?)(\.|!|\?)/i,
+      replacement: (m: RegExpMatchArray) => `${m[2]} is developed by ${m[1]}${m[3]}`
+    }
   ];
   
-  if (Math.random() > 0.3) {
-    const opener = openers[Math.floor(Math.random() * openers.length)];
-    return `${opener} ${sentence.toLowerCase()}`;
+  for (const pattern of patterns) {
+    const match = result.match(pattern.regex);
+    if (match) {
+      return pattern.replacement(match);
+    }
+  }
+  
+  return result;
+};
+
+// Change voice
+const changeVoiceHeavy = (sentence: string): string => {
+  const activeSimple = sentence.match(/^(\w+)\s+(\w+[sd]?)\s+(\w+)(\.|!|\?)/i);
+  if (activeSimple) {
+    const subject = activeSimple[1];
+    const verb = activeSimple[2];
+    const object = activeSimple[3];
+    const punct = activeSimple[4];
+    
+    let pastParticiple = verb;
+    if (verb.endsWith('s')) pastParticiple = verb.slice(0, -1) + 'ed';
+    else if (verb.endsWith('e')) pastParticiple = verb + 'd';
+    else if (verb.endsWith('y') && !/[aeiou]/.test(verb[verb.length - 2])) pastParticiple = verb.slice(0, -1) + 'ied';
+    else pastParticiple = verb + 'ed';
+    
+    return `The ${object} is ${pastParticiple} by ${subject}${punct}`;
+  }
+  
+  const passiveMatch = sentence.match(/^The\s+(.+?)\s+is\s+(\w+ed)\s+by\s+(.+?)(\.|!|\?)/i);
+  if (passiveMatch) {
+    const object = passiveMatch[1];
+    const verb = passiveMatch[2].replace(/ed$/, '');
+    const subject = passiveMatch[3];
+    const punct = passiveMatch[4];
+    
+    let presentVerb = verb;
+    if (verb.endsWith('e')) presentVerb = verb + 's';
+    else if (verb.endsWith('y') && !/[aeiou]/.test(verb[verb.length - 2])) presentVerb = verb.slice(0, -1) + 'ies';
+    else presentVerb = verb + 's';
+    
+    return `${subject} ${presentVerb} the ${object}${punct}`;
   }
   
   return sentence;
 };
 
-const addPersonalOpinion = (sentence: string): string => {
-  const opinions = [
-    'in my experience',
-    'from what I\'ve seen',
-    'as far as I can tell',
-    'based on my observations',
-    'in my humble opinion'
+// Split and combine sentences
+const splitAndCombine = (sentence: string): string => {
+  const words = sentence.split(' ');
+  
+  if (words.length > 10 && Math.random() < 0.6) {
+    const splitPoints = words.reduce((acc: number[], word, index) => {
+      if (['and', 'but', 'or', 'because', 'although', 'while', 'however', 'therefore', 'moreover', 'furthermore'].includes(word.toLowerCase())) {
+        acc.push(index);
+      }
+      return acc;
+    }, []);
+    
+    if (splitPoints.length > 0) {
+      const splitIndex = splitPoints[Math.floor(Math.random() * splitPoints.length)];
+      if (splitIndex > 3 && splitIndex < words.length - 3) {
+        const firstPart = words.slice(0, splitIndex).join(' ');
+        const secondPart = words.slice(splitIndex + 1).join(' ');
+        return `${firstPart}. ${secondPart}`;
+      }
+    }
+  }
+  
+  if (words.length < 5 && Math.random() < 0.5) {
+    const extras = [
+      ' Additionally, this is worth considering.',
+      ' Furthermore, this deserves attention.',
+      ' Moreover, this is significant.',
+      ' In addition, this is noteworthy.',
+      ' Besides, this is an important factor.'
+    ];
+    return sentence + extras[Math.floor(Math.random() * extras.length)];
+  }
+  
+  return sentence;
+};
+
+// Add intensifiers
+const addIntensifiers = (sentence: string): string => {
+  const words = sentence.split(' ');
+  if (words.length > 6 && Math.random() < 0.6) {
+    const intensifier = intensifiers[Math.floor(Math.random() * intensifiers.length)];
+    const index = Math.floor(Math.random() * (words.length - 3)) + 1;
+    words.splice(index, 0, intensifier);
+    return words.join(' ');
+  }
+  return sentence;
+};
+
+// Change sentence type
+const changeSentenceType = (sentence: string): string => {
+  if (Math.random() < 0.2 && sentence.length > 20) {
+    const words = sentence.split(' ');
+    if (words.length > 3) {
+      const auxiliaries = ['is', 'are', 'was', 'were', 'has', 'have', 'do', 'does', 'did', 'can', 'could', 'will', 'would', 'should', 'may', 'might'];
+      const firstWord = words[0].toLowerCase();
+      if (!auxiliaries.includes(firstWord) && !firstWord.endsWith('?')) {
+        const questionStart = ['Why', 'How', 'What', 'When', 'Where', 'Who'];
+        const qStart = questionStart[Math.floor(Math.random() * questionStart.length)];
+        return `${qStart} ${sentence.toLowerCase().replace(/[.!?]+$/, '')}?`;
+      }
+    }
+  }
+  
+  if (Math.random() < 0.15 && sentence.length > 15) {
+    return sentence.replace(/[.!?]+$/, '!');
+  }
+  
+  return sentence;
+};
+
+// Add personal touch
+const addPersonalTouch = (sentence: string): string => {
+  const personalTouches = [
+    'in my view', 'from my perspective', 'as I see it', 'in my opinion',
+    'based on my experience', 'speaking personally', 'in my estimation',
+    'from where I stand', 'in my judgment', 'to my mind'
   ];
   
-  if (Math.random() > 0.3) {
-    const opinion = opinions[Math.floor(Math.random() * opinions.length)];
+  if (Math.random() < 0.4 && sentence.length > 15) {
+    const touch = personalTouches[Math.floor(Math.random() * personalTouches.length)];
     const words = sentence.split(' ');
     if (words.length > 4) {
       const index = Math.floor(Math.random() * (words.length - 2)) + 1;
-      words.splice(index, 0, opinion);
+      words.splice(index, 0, touch);
       return words.join(' ');
     }
   }
@@ -383,38 +531,22 @@ const addPersonalOpinion = (sentence: string): string => {
   return sentence;
 };
 
-const reorderClauses = (sentence: string): string => {
-  // Pattern: "Because X, Y happened" → "Y happened because X"
-  const causeMatch = sentence.match(/^(Because|Since|As|Given that)\s+(.+?),\s*(.+?)(\.|!|\?)/);
-  if (causeMatch) {
-    return `${causeMatch[3]} because ${causeMatch[2]}${causeMatch[4]}`;
-  }
-  
-  // Pattern: "X, although Y" → "Although Y, X"
-  const concessiveMatch = sentence.match(/^(.+?),\s*(although|though|while|whereas)\s+(.+?)(\.|!|\?)/);
-  if (concessiveMatch) {
-    return `${concessiveMatch[2]} ${concessiveMatch[3]}, ${concessiveMatch[1]}${concessiveMatch[4]}`;
-  }
-  
-  return sentence;
-};
-
-const addCommentary = (sentence: string): string => {
-  const comments = [
-    ' which is worth noting',
-    ' as it turns out',
-    ' interestingly enough',
-    ' surprisingly',
-    ' notably',
-    ' in fact'
+// Add idiom
+const addIdiom = (sentence: string): string => {
+  const idioms = [
+    'at the end of the day', 'in a nutshell', 'the bottom line is',
+    'as a matter of fact', 'in the grand scheme of things', 'all things considered',
+    'to make a long story short', 'it goes without saying', 'needless to say',
+    'come to think of it', 'in the long run', 'by and large', 'for the most part',
+    'when push comes to shove', 'by the same token', 'as luck would have it'
   ];
   
-  if (Math.random() > 0.4) {
-    const comment = comments[Math.floor(Math.random() * comments.length)];
+  if (Math.random() < 0.25 && sentence.length > 20) {
+    const idiom = idioms[Math.floor(Math.random() * idioms.length)];
     const words = sentence.split(' ');
     if (words.length > 4) {
       const index = Math.floor(Math.random() * (words.length - 2)) + 1;
-      words.splice(index, 0, comment);
+      words.splice(index, 0, idiom);
       return words.join(' ');
     }
   }
@@ -422,357 +554,82 @@ const addCommentary = (sentence: string): string => {
   return sentence;
 };
 
-const splitSentences = (text: string): string => {
-  let result = text;
+// Add transition inside sentence
+const addTransitionInside = (sentence: string): string => {
+  const transitions = ['however', 'therefore', 'consequently', 'meanwhile', 'nevertheless', 'nonetheless', 'furthermore', 'moreover', 'accordingly'];
   
-  result = result.replace(/,\s/g, (match) => {
-    return Math.random() > 0.3 ? '. ' : match;
-  });
-  
-  const conjunctions = [' and ', ' but ', ' or '];
-  for (const conj of conjunctions) {
-    result = result.replace(new RegExp(conj, 'gi'), (match) => {
-      return Math.random() > 0.3 ? '. ' : match;
-    });
+  if (Math.random() < 0.35 && sentence.length > 25) {
+    const transition = transitions[Math.floor(Math.random() * transitions.length)];
+    const words = sentence.split(' ');
+    if (words.length > 6) {
+      const index = Math.floor(Math.random() * (words.length - 3)) + 2;
+      words.splice(index, 0, transition + ',');
+      return words.join(' ');
+    }
   }
   
-  return result;
+  return sentence;
 };
 
-const addConnectors = (text: string): string => {
-  const connectors = [
-    '; moreover,',
-    '; in fact,',
-    '; what is more,',
-    '; consequently,',
-    '; however,',
-    '; therefore,'
+// Add extra words
+const addExtraWords = (sentence: string): string => {
+  const extraWords = [
+    'actually', 'basically', 'honestly', 'frankly', 'literally',
+    'really', 'truly', 'genuinely', 'absolutely', 'definitely',
+    'certainly', 'indeed', 'undoubtedly', 'unquestionably', 'without a doubt'
   ];
   
-  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-  let result: string[] = [];
-  
-  for (let i = 0; i < sentences.length; i++) {
-    let sentence = sentences[i] || '';
-    if (i < sentences.length - 1 && sentence.length > 30 && Math.random() > 0.5) {
-      const connector = connectors[Math.floor(Math.random() * connectors.length)];
-      sentence = sentence.replace(/[.!?]+$/, '') + connector;
-    }
-    result.push(sentence);
-  }
-  
-  return result.join(' ');
-};
-
-const splitAndCombineSentences = (sentences: string[]): string => {
-  let result: string[] = [];
-  
-  for (let i = 0; i < sentences.length; i++) {
-    let sentence = sentences[i] || '';
-    
-    // Split long sentences
-    if (sentence.split(' ').length > 15 && Math.random() > 0.3) {
-      const parts = sentence.split(/,\s|;\s| and | but | or /);
-      if (parts.length > 1) {
-        for (const part of parts) {
-          if (part.trim()) {
-            result.push(part.trim() + '.');
-          }
-        }
-        continue;
-      }
-    }
-    
-    // Combine short sentences
-    if (result.length > 0 && sentence.split(' ').length < 8 && Math.random() > 0.5) {
-      const last = result.pop() || '';
-      result.push(last.replace(/\.$/, '') + ', and ' + sentence.toLowerCase());
-    } else {
-      result.push(sentence);
+  if (Math.random() < 0.3 && sentence.length > 20) {
+    const extra = extraWords[Math.floor(Math.random() * extraWords.length)];
+    const words = sentence.split(' ');
+    if (words.length > 4) {
+      const index = Math.floor(Math.random() * (words.length - 2)) + 1;
+      words.splice(index, 0, extra);
+      return words.join(' ');
     }
   }
   
-  return result.join(' ');
+  return sentence;
 };
 
-const addMultipleFiller = (text: string): string => {
-  const fillers = [
-    'which is worth noting',
-    'as it turns out',
-    'interestingly enough',
-    'surprisingly',
-    'notably',
-    'in fact',
-    'as a matter of fact',
-    'come to think of it',
-    'to be fair',
-    'all things considered'
+// Change word order
+const changeOrder = (sentence: string): string => {
+  const words = sentence.split(' ');
+  if (words.length > 8 && Math.random() < 0.3) {
+    const start = Math.floor(words.length * 0.2);
+    const end = Math.floor(words.length * 0.4);
+    const section = words.splice(start, end - start);
+    words.unshift(...section);
+    return words.join(' ');
+  }
+  return sentence;
+};
+
+// Add parenthetical phrase
+const addParenthetical = (sentence: string): string => {
+  const parentheticals = [
+    'for instance', 'for example', 'that is', 'in other words',
+    'so to speak', 'as it were', 'in fact', 'to be precise'
   ];
   
-  const sentences = text.split('. ');
-  let result: string[] = [];
-  
-  for (let i = 0; i < sentences.length; i++) {
-    let sentence = sentences[i] || '';
-    if (i > 0 && Math.random() > 0.4 && sentence.length > 15) {
-      const filler = fillers[Math.floor(Math.random() * fillers.length)];
-      if (Math.random() > 0.5) {
-        sentence = `${filler}, ${sentence.toLowerCase()}`;
-      } else {
-        const words = sentence.split(' ');
-        const index = Math.floor(Math.random() * (words.length - 2)) + 1;
-        words.splice(index, 0, filler);
-        sentence = words.join(' ');
-      }
-    }
-    result.push(sentence);
-  }
-  
-  return result.join('. ');
-};
-
-const addPerspectives = (text: string): string => {
-  const perspectives = [
-    'from my perspective',
-    'in my experience',
-    'from what I\'ve seen',
-    'as far as I can tell',
-    'based on my observations',
-    'in my humble opinion'
-  ];
-  
-  const sentences = text.split('. ');
-  let result: string[] = [];
-  
-  for (let i = 0; i < sentences.length; i++) {
-    let sentence = sentences[i] || '';
-    if (i > 0 && Math.random() > 0.4) {
-      const perspective = perspectives[Math.floor(Math.random() * perspectives.length)];
-      sentence = `${perspective}, ${sentence.toLowerCase()}`;
-    }
-    result.push(sentence);
-  }
-  
-  return result.join('. ');
-};
-
-const voiceChanges = (text: string): string => {
-  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-  
-  return sentences.map(sentence => {
-    if (Math.random() > 0.6) return sentence;
-    
-    // "Researchers found that X" → "It was found that X"
-    const activeSubject = sentence.match(/^([A-Z][a-z]+)\s+(found|showed|demonstrated|argued|claimed|noted)\s+(that\s+.+)/);
-    if (activeSubject) {
-      return `It was ${activeSubject[2] === 'found' ? 'found' : 'shown'} ${activeSubject[3]}`;
-    }
-    
-    return sentence;
-  }).join(' ');
-};
-
-const replaceWords = (text: string, rate: number): string => {
-  const replacements: { [key: string]: string[] } = {
-    'is': ['remains', 'stays', 'continues to be', 'functions as', 'serves as'],
-    'are': ['remain', 'stay', 'continue to be', 'function as', 'serve as'],
-    'has': ['possesses', 'holds', 'contains', 'includes', 'boasts'],
-    'have': ['possess', 'hold', 'contain', 'include', 'boast'],
-    'can': ['may', 'might', 'could', 'is able to', 'has the ability to'],
-    'will': ['shall', 'would', 'is going to', 'intends to'],
-    'very': ['quite', 'rather', 'pretty', 'fairly', 'extremely'],
-    'really': ['truly', 'actually', 'genuinely', 'honestly', 'absolutely'],
-    'important': ['key', 'critical', 'essential', 'vital', 'crucial'],
-    'many': ['numerous', 'countless', 'several', 'a lot of', 'plenty of'],
-    'more': ['additional', 'extra', 'further', 'supplementary'],
-    'new': ['fresh', 'novel', 'modern', 'contemporary', 'cutting-edge'],
-    'good': ['great', 'excellent', 'fine', 'superior', 'outstanding'],
-    'big': ['large', 'great', 'huge', 'massive', 'enormous'],
-    'small': ['little', 'tiny', 'compact', 'mini', 'petite'],
-    'easy': ['simple', 'straightforward', 'effortless', 'uncomplicated'],
-    'hard': ['difficult', 'tough', 'challenging', 'complex'],
-    'clear': ['obvious', 'apparent', 'evident', 'transparent'],
-    'sure': ['certain', 'confident', 'convinced', 'positive'],
-    'right': ['correct', 'accurate', 'precise', 'exact'],
-    'true': ['real', 'actual', 'genuine', 'authentic', 'legitimate'],
-    'able': ['capable', 'competent', 'skilled', 'proficient'],
-    'main': ['primary', 'principal', 'chief', 'major'],
-    'full': ['complete', 'entire', 'whole', 'comprehensive'],
-    'only': ['solely', 'exclusively', 'merely', 'just'],
-    'now': ['currently', 'presently', 'at present', 'right now'],
-    'then': ['afterward', 'subsequently', 'later', 'after that'],
-    'than': ['versus', 'compared to', 'as opposed to', 'in contrast to'],
-  };
-
-  let result = text;
-  for (const [word, replacementsList] of Object.entries(replacements)) {
-    const regex = new RegExp(`\\b${word}\\b`, 'gi');
-    const matches = result.match(regex);
-    if (matches) {
-      const replaceCount = Math.ceil(matches.length * rate);
-      let count = 0;
-      result = result.replace(regex, (match) => {
-        if (count < replaceCount) {
-          count++;
-          const replacement = replacementsList[Math.floor(Math.random() * replacementsList.length)];
-          return replacement || match;
-        }
-        return match;
-      });
+  if (Math.random() < 0.2 && sentence.length > 25) {
+    const parenthetical = parentheticals[Math.floor(Math.random() * parentheticals.length)];
+    const words = sentence.split(' ');
+    if (words.length > 5) {
+      const index = Math.floor(Math.random() * (words.length - 3)) + 2;
+      words.splice(index, 0, `(${parenthetical})`);
+      return words.join(' ');
     }
   }
   
-  return result;
+  return sentence;
 };
 
-const addContractions = (text: string, rate: number): string => {
-  const contractions: { [key: string]: string } = {
-    'cannot': 'can\'t',
-    'will not': 'won\'t',
-    'do not': 'don\'t',
-    'does not': 'doesn\'t',
-    'is not': 'isn\'t',
-    'are not': 'aren\'t',
-    'was not': 'wasn\'t',
-    'were not': 'weren\'t',
-    'have not': 'haven\'t',
-    'has not': 'hasn\'t',
-    'would not': 'wouldn\'t',
-    'could not': 'couldn\'t',
-    'should not': 'shouldn\'t',
-    'I am': 'I\'m',
-    'you are': 'you\'re',
-    'he is': 'he\'s',
-    'she is': 'she\'s',
-    'it is': 'it\'s',
-    'we are': 'we\'re',
-    'they are': 'they\'re',
-    'I have': 'I\'ve',
-    'you have': 'you\'ve',
-    'we have': 'we\'ve',
-    'they have': 'they\'ve',
-    'I would': 'I\'d',
-    'you would': 'you\'d',
-    'he would': 'he\'d',
-    'she would': 'she\'d',
-    'we would': 'we\'d',
-    'they would': 'they\'d',
-    'I will': 'I\'ll',
-    'you will': 'you\'ll',
-    'he will': 'he\'ll',
-    'she will': 'she\'ll',
-    'we will': 'we\'ll',
-    'they will': 'they\'ll',
-  };
-  
-  let result = text;
-  for (const [formal, casual] of Object.entries(contractions)) {
-    const regex = new RegExp(`\\b${formal}\\b`, 'gi');
-    const matches = result.match(regex);
-    if (matches) {
-      const replaceCount = Math.ceil(matches.length * rate);
-      let count = 0;
-      result = result.replace(regex, (match) => {
-        if (count < replaceCount) {
-          count++;
-          return casual;
-        }
-        return match;
-      });
-    }
-  }
-  
-  return result;
-};
-
-const makeCasual = (text: string, rate: number): string => {
-  const casualWords: { [key: string]: string[] } = {
-    'very': ['really', 'totally', 'absolutely', 'so', 'super', 'seriously'],
-    'really': ['so', 'totally', 'completely', 'absolutely', 'definitely'],
-    'good': ['great', 'excellent', 'awesome', 'brilliant', 'fantastic', 'amazing'],
-    'bad': ['terrible', 'awful', 'horrible', 'dreadful', 'rubbish', 'lousy'],
-    'big': ['large', 'huge', 'massive', 'enormous', 'giant', 'humongous'],
-    'small': ['little', 'tiny', 'compact', 'mini', 'petite', 'wee'],
-    'many': ['lots of', 'a bunch of', 'tons of', 'loads of', 'heaps of', 'oodles of'],
-    'difficult': ['hard', 'tough', 'challenging', 'rough', 'tricky'],
-    'easy': ['simple', 'straightforward', 'a breeze', 'piece of cake', 'no sweat']
-  };
-  
-  let result = text;
-  for (const [word, replacementsList] of Object.entries(casualWords)) {
-    const regex = new RegExp(`\\b${word}\\b`, 'gi');
-    const matches = result.match(regex);
-    if (matches) {
-      const replaceCount = Math.ceil(matches.length * rate);
-      let count = 0;
-      result = result.replace(regex, (match) => {
-        if (count < replaceCount) {
-          count++;
-          const replacement = replacementsList[Math.floor(Math.random() * replacementsList.length)];
-          return replacement || match;
-        }
-        return match;
-      });
-    }
-  }
-  
-  return result;
-};
+// ============ UTILITY FUNCTIONS ============
 
 const shuffleArray = <T>(array: T[]): void => {
   for (let i = array.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [array[i], array[j]] = [array[j], array[i]];
   }
-};
-
-// ============ TONE ADJUSTMENTS ============
-
-const applyToneAdjustments = (text: string, tone: string, intensity: string): string => {
-  let result = text;
-  
-  if (intensity === 'heavy' || intensity === 'medium') {
-    return result;
-  }
-  
-  switch (tone) {
-    case 'professional':
-      result = result.replace(/\b(can't)\b/gi, 'cannot');
-      result = result.replace(/\b(won't)\b/gi, 'will not');
-      result = result.replace(/\b(don't)\b/gi, 'do not');
-      result = result.replace(/\b(isn't)\b/gi, 'is not');
-      result = result.replace(/\b(aren't)\b/gi, 'are not');
-      break;
-      
-    case 'academic':
-      result = result.replace(/\b(use)\b/gi, 'utilize');
-      result = result.replace(/\b(help)\b/gi, 'assist');
-      result = result.replace(/\b(show)\b/gi, 'demonstrate');
-      result = result.replace(/\b(so)\b/gi, 'therefore');
-      result = result.replace(/\b(but)\b/gi, 'however');
-      break;
-      
-    case 'creative':
-      const creativeWords = [
-        'vividly', 'brilliantly', 'exquisitely', 'magnificently', 'splendidly',
-        'captivatingly', 'enchantingly', 'enthrallingly', 'mesmerizingly'
-      ];
-      const sentences = result.split('. ');
-      if (sentences.length > 1) {
-        for (let i = 0; i < sentences.length; i += 2) {
-          if (Math.random() > 0.5) {
-            const words = sentences[i].split(' ');
-            if (words.length > 3) {
-              const pos = Math.floor(Math.random() * (words.length - 2)) + 1;
-              words.splice(pos, 0, creativeWords[Math.floor(Math.random() * creativeWords.length)]);
-              sentences[i] = words.join(' ');
-            }
-          }
-        }
-        result = sentences.join('. ');
-      }
-      break;
-  }
-  
-  return result;
 };

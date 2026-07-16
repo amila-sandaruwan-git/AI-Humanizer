@@ -13,7 +13,7 @@ import {
   Paper,
   Typography,
   Slider,
-} from '@mui/material'; // Removed Chip as it's not used
+} from '@mui/material';
 import { humanizeText } from '../services/aiService';
 import { HumanizeResponse, ToneType, StyleType, IntensityType } from '../types';
 import ResultDisplay from './ResultDisplay';

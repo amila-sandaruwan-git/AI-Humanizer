@@ -2,9 +2,7 @@ import React, { useState } from 'react';
 import {
   Box,
   Paper,
-  Grid,
   Typography,
-  Button,
   Card,
   CardContent,
   Chip,
@@ -18,7 +16,6 @@ import {
   ContentCopy,
   CheckCircle,
   BarChart,
-  Refresh,
 } from '@mui/icons-material';
 import { HumanizeResponse } from '../types';
 
@@ -45,7 +42,6 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result }) => {
     const originalSet = new Set(originalWords);
     const humanizedSet = new Set(humanizedWords);
     
-    // Fix: Use Array.from() instead of spread operator for Set
     const intersection = new Set(
       Array.from(originalSet).filter(word => humanizedSet.has(word))
     );
@@ -57,7 +53,6 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result }) => {
   return (
     <Box sx={{ mt: 4 }}>
       <Paper elevation={2} sx={{ p: 3 }}>
-        {/* Fix: Use sx with display:flex instead of justifyContent on Stack */}
         <Stack 
           direction="row" 
           sx={{ 
@@ -71,7 +66,12 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result }) => {
             Humanized Result
           </Typography>
           <Stack direction="row" spacing={1}>
-            
+            <Chip
+              icon={<BarChart />}
+              label={`${similarityScore}% similar`}
+              color={similarityScore > 70 ? 'success' : similarityScore > 40 ? 'warning' : 'error'}
+              size="small"
+            />
             <Tooltip title={copied ? 'Copied!' : 'Copy to clipboard'}>
               <IconButton onClick={handleCopy} color={copied ? 'success' : 'primary'}>
                 {copied ? <CheckCircle /> : <ContentCopy />}
@@ -82,7 +82,6 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result }) => {
 
         <Divider sx={{ mb: 2 }} />
 
-        {/* Fix: Use Grid2 or standard Box with flex for better compatibility */}
         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
           <Box sx={{ flex: 1 }}>
             <Card variant="outlined">
@@ -122,7 +121,32 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result }) => {
             </Card>
           </Box>
         </Box>
-        
+
+        {result.changes && (
+          <Box sx={{ mt: 3, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Changes Summary
+            </Typography>
+            <Stack direction="row" spacing={3}>
+              <Chip 
+                label={`${result.changes.sentencesRewritten} sentences rewritten`}
+                color="info"
+                size="small"
+              />
+              <Chip 
+                label={`${result.changes.wordsChanged} words changed`}
+                color="info"
+                size="small"
+              />
+            </Stack>
+          </Box>
+        )}
+
+        <Alert severity="info" sx={{ mt: 2 }}>
+          <Typography variant="body2">
+            💡 Tip: For best results, review and personalize the humanized text to match your unique voice and style.
+          </Typography>
+        </Alert>
       </Paper>
     </Box>
   );

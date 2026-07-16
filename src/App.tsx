@@ -1,3 +1,5 @@
+// src/App.tsx
+
 import React from 'react';
 import { ThemeProvider } from '@mui/material/styles';
 import { CssBaseline, Container, Box, Typography } from '@mui/material'; // Added Typography
