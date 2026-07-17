@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   TextField,
@@ -15,15 +15,20 @@ import {
   Slider,
   IconButton,
   Tooltip,
+  Collapse,
+  Divider,
 } from '@mui/material';
 import {
   Undo,
   Redo,
   Clear,
+  UploadFile,
+  Close,
 } from '@mui/icons-material';
 import { humanizeText } from '../services/aiService';
 import { HumanizeResponse, ToneType, StyleType, IntensityType } from '../types';
 import ResultDisplay from './ResultDisplay';
+import FileUpload from './FileUpload';
 import { useToast } from '../context/ToastContext';
 import { useUndo } from '../hooks/useUndo';
 
@@ -38,6 +43,8 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<HumanizeResponse | null>(null);
+  const [showFileUpload, setShowFileUpload] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
   
   // Use Undo/Redo hook for text
   const {
@@ -49,7 +56,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
     canUndo,
     canRedo,
     clearHistory,
-  } = useUndo<string>('', { maxHistory: 50 });
+  } = useUndo<string>('', { maxHistory: 50, debounceTime: 300 });
   
   // Use Toast hook
   const { showSuccess, showError, showInfo, showLoading, dismissToast } = useToast();
@@ -71,27 +78,60 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [canUndo, canRedo]);
 
-  const handleUndo = useCallback(() => {
-    if (canUndo) {
-      const previousText = undo();
-      showInfo('Undo ✅');
-      return previousText;
-    }
-  }, [canUndo, undo, showInfo]);
+  const handleUndo = () => {
+    const previousText = undo();
+    showInfo('Undo ✅');
+    return previousText;
+  };
 
-  const handleRedo = useCallback(() => {
-    if (canRedo) {
-      const nextText = redo();
-      showInfo('Redo 🔄');
-      return nextText;
-    }
-  }, [canRedo, redo, showInfo]);
+  const handleRedo = () => {
+    const nextText = redo();
+    showInfo('Redo 🔄');
+    return nextText;
+  };
 
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newText = e.target.value;
     setText(newText);
+  };
+
+  const handleFileContent = (content: string, name: string) => {
+    // Append file content to existing text with a separator
+    const separator = text ? '\n\n' : '';
+    const newText = text + separator + content;
+    setTextImmediate(newText);
+    setFileName(name);
+    setShowFileUpload(false);
+    showInfo(`File "${name}" loaded successfully! 📄`);
+  };
+
+  const handleRemoveFileContent = () => {
+    // Remove the file content from the text
+    // This is a simple approach - you might want to be more sophisticated
+    const lines = text.split('\n');
+    let fileContentStart = -1;
+    let fileContentEnd = -1;
+    
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].startsWith(`=== ${fileName}`)) {
+        fileContentStart = i;
+      }
+      if (fileContentStart !== -1 && lines[i].startsWith('===') && i > fileContentStart) {
+        fileContentEnd = i;
+        break;
+      }
+    }
+    
+    if (fileContentStart !== -1 && fileContentEnd !== -1) {
+      const beforeContent = lines.slice(0, fileContentStart).join('\n');
+      const afterContent = lines.slice(fileContentEnd + 1).join('\n');
+      const newText = [beforeContent, afterContent].filter(s => s.trim()).join('\n\n');
+      setTextImmediate(newText);
+      setFileName(null);
+      showInfo('File content removed');
+    }
   };
 
   const handleHumanize = async () => {
@@ -135,6 +175,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
     clearHistory();
     setResult(null);
     setError(null);
+    setFileName(null);
     showInfo('Cleared all text 🗑️');
   };
 
@@ -174,6 +215,15 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
           
           {/* Undo/Redo Controls */}
           <Box sx={{ display: 'flex', gap: 1 }}>
+            <Tooltip title="Import File">
+              <IconButton 
+                onClick={() => setShowFileUpload(!showFileUpload)}
+                color="primary"
+                disabled={loading}
+              >
+                <UploadFile />
+              </IconButton>
+            </Tooltip>
             <Tooltip title={`Undo (Ctrl+Z)${!canUndo ? ' - No actions to undo' : ''}`}>
               <span>
                 <IconButton 
@@ -210,16 +260,42 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
           </Box>
         </Box>
 
+        {/* File Upload Section */}
+        <Collapse in={showFileUpload}>
+          <Box sx={{ mb: 3 }}>
+            <Divider sx={{ mb: 2 }} />
+            <FileUpload onFileContent={handleFileContent} />
+            {fileName && (
+              <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="caption" color="text.secondary">
+                  Loaded: {fileName}
+                </Typography>
+                <IconButton size="small" onClick={handleRemoveFileContent}>
+                  <Close fontSize="small" />
+                </IconButton>
+              </Box>
+            )}
+            <Divider sx={{ mt: 2 }} />
+          </Box>
+        </Collapse>
+
         {/* Input area */}
         <TextField
           fullWidth
           multiline
           rows={8}
           variant="outlined"
-          placeholder="Paste your AI-generated text here..."
+          placeholder="Paste your AI-generated text here or upload a file..."
           value={text}
           onChange={handleTextChange}
-          sx={{ mb: 2 }}
+          sx={{ 
+            mb: 2,
+            '& .MuiInputBase-root': {
+              fontFamily: 'inherit',
+              fontSize: '1rem',
+              lineHeight: 1.6,
+            }
+          }}
           disabled={loading}
         />
 
@@ -230,6 +306,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
           </Typography>
           <Typography variant="caption" color="text.secondary">
             {canUndo || canRedo ? `History: ${canUndo ? '↩️' : ''} ${canRedo ? '↪️' : ''}` : ''}
+            {fileName && ` • 📄 ${fileName}`}
           </Typography>
         </Box>
 

@@ -101,8 +101,7 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, onCopy }) => {
   return (
     <Box sx={{ mt: 4 }}>
       <Paper elevation={2} sx={{ p: 3 }}>
-        <Stack 
-          direction="row" 
+        <Box 
           sx={{ 
             display: 'flex',
             justifyContent: 'space-between', 
@@ -113,7 +112,7 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, onCopy }) => {
           <Typography variant="h6">
             Humanized Result
           </Typography>
-          <Stack direction="row" spacing={1}>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
             <Chip 
               label={`${similarityScore}% similar`}
               color={getSimilarityColor(similarityScore)}
@@ -134,57 +133,37 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, onCopy }) => {
                 <Share />
               </IconButton>
             </Tooltip>
-          </Stack>
-        </Stack>
+          </Box>
+        </Box>
 
         <Divider sx={{ mb: 2 }} />
 
-        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
-          <Box sx={{ flex: 1 }}>
-            <Card variant="outlined">
-              <CardContent>
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                  Original Text ({result.wordCount.original} words)
-                </Typography>
-                <Typography variant="body2" sx={{ 
-                  maxHeight: 200, 
-                  overflow: 'auto',
-                  backgroundColor: '#f5f5f5',
-                  p: 2,
-                  borderRadius: 1,
-                }}>
-                  {result.original}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Box>
-
-          <Box sx={{ flex: 1 }}>
-            <Card variant="outlined" sx={{ borderColor: 'primary.main' }}>
-              <CardContent>
-                <Typography variant="subtitle2" color="primary" gutterBottom>
-                  Humanized Text ({result.wordCount.humanized} words)
-                </Typography>
-                <Typography variant="body2" sx={{ 
-                  maxHeight: 200, 
-                  overflow: 'auto',
-                  backgroundColor: '#e3f2fd',
-                  p: 2,
-                  borderRadius: 1,
-                }}>
-                  {result.humanized}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Box>
-        </Box>
+        {/* Only Humanized Text - Removed Original Text section */}
+        <Card variant="outlined" sx={{ borderColor: 'primary.main' }}>
+          <CardContent>
+            <Typography variant="subtitle2" color="primary" gutterBottom>
+              Humanized Text ({result.wordCount.humanized} words)
+            </Typography>
+            <Typography variant="body2" sx={{ 
+              maxHeight: 300, 
+              overflow: 'auto',
+              backgroundColor: '#e3f2fd',
+              p: 2,
+              borderRadius: 1,
+              whiteSpace: 'pre-wrap',
+              wordWrap: 'break-word',
+            }}>
+              {result.humanized}
+            </Typography>
+          </CardContent>
+        </Card>
 
         {result.changes && (
           <Box sx={{ mt: 3, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
             <Typography variant="subtitle2" gutterBottom>
               Changes Summary
             </Typography>
-            <Stack direction="row" spacing={3}>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               <Chip 
                 label={`${result.changes.sentencesRewritten} sentences rewritten`}
                 color="info"
@@ -200,7 +179,7 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, onCopy }) => {
                 color="default"
                 size="small"
               />
-            </Stack>
+            </Box>
           </Box>
         )}
 
