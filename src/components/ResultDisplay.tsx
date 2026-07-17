@@ -138,28 +138,32 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, onCopy }) => {
 
         <Divider sx={{ mb: 2 }} />
 
-        {/* Only Humanized Text - Removed Original Text section */}
+        {/* Only Humanized Text */}
         <Card variant="outlined" sx={{ borderColor: 'primary.main' }}>
           <CardContent>
             <Typography variant="subtitle2" color="primary" gutterBottom>
               Humanized Text ({result.wordCount.humanized} words)
             </Typography>
-            <Typography variant="body2" sx={{ 
-              maxHeight: 300, 
-              overflow: 'auto',
-              backgroundColor: '#e3f2fd',
-              p: 2,
-              borderRadius: 1,
-              whiteSpace: 'pre-wrap',
-              wordWrap: 'break-word',
-            }}>
+            <Typography 
+              variant="body2" 
+              sx={{ 
+                maxHeight: 300, 
+                overflow: 'auto',
+                backgroundColor: 'transparent',
+                p: 2,
+                borderRadius: 1,
+                whiteSpace: 'pre-wrap',
+                wordWrap: 'break-word',
+                color: 'text.primary', // This ensures text is visible in dark mode
+              }}
+            >
               {result.humanized}
             </Typography>
           </CardContent>
         </Card>
 
         {result.changes && (
-          <Box sx={{ mt: 3, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+          <Box sx={{ mt: 3, p: 2, backgroundColor: 'action.hover', borderRadius: 1 }}>
             <Typography variant="subtitle2" gutterBottom>
               Changes Summary
             </Typography>

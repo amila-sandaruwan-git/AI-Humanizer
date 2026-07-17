@@ -56,39 +56,61 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
     canUndo,
     canRedo,
     clearHistory,
-  } = useUndo<string>('', { maxHistory: 50, debounceTime: 300 });
+  } = useUndo<string>('', { maxHistory: 100 });
   
   // Use Toast hook
   const { showSuccess, showError, showInfo, showLoading, dismissToast } = useToast();
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts - FIXED: Use capture phase and proper event handling
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+Z for Undo
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+      // Check if Ctrl or Cmd is pressed
+      const isCtrl = e.ctrlKey || e.metaKey;
+      
+      // Undo: Ctrl+Z
+      if (isCtrl && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
-        handleUndo();
+        e.stopPropagation();
+        const previousText = undo();
+        if (previousText !== undefined) {
+          showInfo('Undo ✅');
+        }
+        return;
       }
-      // Ctrl+Shift+Z or Ctrl+Y for Redo
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+      
+      // Redo: Ctrl+Y or Ctrl+Shift+Z
+      if (isCtrl && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
         e.preventDefault();
-        handleRedo();
+        e.stopPropagation();
+        const nextText = redo();
+        if (nextText !== undefined) {
+          showInfo('Redo 🔄');
+        }
+        return;
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [canUndo, canRedo]);
+    // Use capture phase to catch events before they reach the textarea
+    document.addEventListener('keydown', handleKeyDown, true);
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [undo, redo, showInfo]);
 
   const handleUndo = () => {
     const previousText = undo();
-    showInfo('Undo ✅');
+    if (previousText !== undefined) {
+      showInfo('Undo ✅');
+    }
     return previousText;
   };
 
   const handleRedo = () => {
     const nextText = redo();
-    showInfo('Redo 🔄');
+    if (nextText !== undefined) {
+      showInfo('Redo 🔄');
+    }
     return nextText;
   };
 
@@ -98,7 +120,6 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
   };
 
   const handleFileContent = (content: string, name: string) => {
-    // Append file content to existing text with a separator
     const separator = text ? '\n\n' : '';
     const newText = text + separator + content;
     setTextImmediate(newText);
@@ -108,8 +129,6 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
   };
 
   const handleRemoveFileContent = () => {
-    // Remove the file content from the text
-    // This is a simple approach - you might want to be more sophisticated
     const lines = text.split('\n');
     let fileContentStart = -1;
     let fileContentEnd = -1;
@@ -288,13 +307,24 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
           placeholder="Paste your AI-generated text here or upload a file..."
           value={text}
           onChange={handleTextChange}
+          onKeyDown={(e) => {
+            // Prevent default browser undo/redo in textarea
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'y')) {
+              e.preventDefault();
+            }
+          }}
           sx={{ 
             mb: 2,
             '& .MuiInputBase-root': {
               fontFamily: 'inherit',
               fontSize: '1rem',
               lineHeight: 1.6,
-            }
+              color: 'text.primary',
+              backgroundColor: 'background.paper',
+            },
+            '& .MuiOutlinedInput-notchedOutline': {
+              borderColor: 'divider',
+            },
           }}
           disabled={loading}
         />
