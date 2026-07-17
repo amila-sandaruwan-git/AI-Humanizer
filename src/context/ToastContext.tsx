@@ -1,5 +1,6 @@
-import React, { createContext, useContext, ReactNode } from 'react';
+import React, { createContext, useContext, ReactNode, useMemo } from 'react';
 import toast, { Toaster, ToastOptions } from 'react-hot-toast';
+import { useTheme } from '@mui/material/styles';
 
 interface ToastContextType {
   showSuccess: (message: string, options?: ToastOptions) => void;
@@ -25,10 +26,48 @@ interface ToastProviderProps {
 }
 
 export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
+
+  // Toast styles based on theme
+  const toastStyles = useMemo(() => ({
+    success: {
+      style: {
+        background: isDark ? '#1e7e34' : '#4caf50',
+        color: '#fff',
+        borderRadius: '8px',
+      },
+    },
+    error: {
+      style: {
+        background: isDark ? '#b71c1c' : '#f44336',
+        color: '#fff',
+        borderRadius: '8px',
+      },
+    },
+    loading: {
+      style: {
+        background: isDark ? '#1e1e1e' : '#ffffff',
+        color: isDark ? '#e0e0e0' : '#333333',
+        borderRadius: '8px',
+        border: isDark ? '1px solid rgba(255,255,255,0.12)' : 'none',
+      },
+    },
+    default: {
+      style: {
+        background: isDark ? '#1e1e1e' : '#ffffff',
+        color: isDark ? '#e0e0e0' : '#333333',
+        borderRadius: '8px',
+        border: isDark ? '1px solid rgba(255,255,255,0.12)' : 'none',
+      },
+    },
+  }), [isDark]);
+
   const showSuccess = (message: string, options?: ToastOptions) => {
     toast.success(message, {
       duration: 3000,
       position: 'top-right',
+      ...toastStyles.success,
       ...options,
     });
   };
@@ -37,6 +76,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     toast.error(message, {
       duration: 4000,
       position: 'top-right',
+      ...toastStyles.error,
       ...options,
     });
   };
@@ -46,6 +86,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
       duration: 3000,
       position: 'top-right',
       icon: 'ℹ️',
+      ...toastStyles.default,
       ...options,
     });
   };
@@ -55,6 +96,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
       duration: 3500,
       position: 'top-right',
       icon: '⚠️',
+      ...toastStyles.default,
       ...options,
     });
   };
@@ -62,6 +104,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
   const showLoading = (message: string, options?: ToastOptions): string => {
     return toast.loading(message, {
       position: 'top-right',
+      ...toastStyles.loading,
       ...options,
     });
   };
@@ -88,21 +131,12 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
         toastOptions={{
           style: {
             borderRadius: '8px',
-            background: '#333',
-            color: '#fff',
+            background: isDark ? '#1e1e1e' : '#ffffff',
+            color: isDark ? '#e0e0e0' : '#333333',
+            border: isDark ? '1px solid rgba(255,255,255,0.12)' : 'none',
           },
-          success: {
-            style: {
-              background: '#4caf50',
-              color: '#fff',
-            },
-          },
-          error: {
-            style: {
-              background: '#f44336',
-              color: '#fff',
-            },
-          },
+          success: toastStyles.success,
+          error: toastStyles.error,
         }}
       />
     </ToastContext.Provider>
