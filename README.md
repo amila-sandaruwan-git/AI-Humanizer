@@ -91,9 +91,9 @@ AI Humanizer is a powerful, free, and offline tool designed to transform AI-gene
 
 ## 🚀 Live Demo
 
-[![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)]([https://ai-humanizer.vercel.app](https://ai-humanizer-liart.vercel.app))
+[![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)]([https://ai-humanizer.vercel.app])
 
-> https://ai-humanizer-liart.vercel.app
+> [Link](https://ai-humanizer-liart.vercel.app)
 
 ---
 
