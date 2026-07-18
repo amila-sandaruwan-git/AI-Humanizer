@@ -872,7 +872,7 @@ const AppContent: React.FC = () => {
                 <Typography variant="body2" color="text.secondary" sx={{
                   fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
                 }}>
-                  AI Humanizer - Transform AI text into human-like content • Made with ❤️
+                  AI Humanizer - Transform AI text into human-like content
                 </Typography>
               </Container>
             </Box>
