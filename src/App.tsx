@@ -1,3 +1,5 @@
+import { Analytics } from "@vercel/analytics/react"
+
 import React, { createContext, useMemo, useState, useRef, useEffect } from 'react';
 import { ThemeProvider } from '@mui/material/styles';
 import { 
@@ -831,7 +833,16 @@ const AppContent: React.FC = () => {
       <ThemeProvider theme={appTheme}>
         <CssBaseline />
         <ToastProvider>
-          <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+          <Box 
+            sx={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              minHeight: '100vh',
+              width: '100%',
+              maxWidth: '100vw',
+              overflowX: 'hidden',
+            }}
+          >
             <Header 
               onAboutClick={scrollToAbout} 
               onHelpClick={scrollToHelp}
@@ -839,7 +850,17 @@ const AppContent: React.FC = () => {
               onLoginClick={handleLoginClick}
             />
             
-            <Container component="main" sx={{ flex: 1, py: 4 }}>
+            <Container 
+              component="main" 
+              maxWidth="lg"
+              sx={{ 
+                flex: 1, 
+                py: { xs: 2, sm: 3, md: 4 },
+                px: { xs: 2, sm: 3, md: 4 },
+                width: '100%',
+                maxWidth: '100%',
+              }}
+            >
               <Box ref={editorRef}>
                 <Editor 
                   onHumanize={handleHumanize} 
@@ -866,6 +887,7 @@ const AppContent: React.FC = () => {
                 backgroundColor: mode === 'dark' ? '#121212' : 'background.paper',
                 borderTop: 1,
                 borderColor: 'divider',
+                mt: 'auto',
               }}
             >
               <Container maxWidth="lg">
@@ -895,6 +917,7 @@ function App() {
   return (
     <AuthProvider>
       <AppContent />
+      <Analytics />
     </AuthProvider>
   );
 }

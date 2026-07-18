@@ -154,7 +154,7 @@ const Header: React.FC<HeaderProps> = ({
   return (
     <>
       <AppBar 
-        position="sticky" 
+        position="fixed"
         color="transparent" 
         elevation={0}
         sx={{
@@ -163,16 +163,15 @@ const Header: React.FC<HeaderProps> = ({
             ? 'rgba(18, 18, 18, 0.85)' 
             : 'rgba(255, 255, 255, 0.85)',
           borderBottom: `1px solid ${colorMode?.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`,
-          // Add shadow
           boxShadow: colorMode?.mode === 'dark' 
             ? '0 4px 30px rgba(0, 0, 0, 0.3)' 
             : '0 4px 30px rgba(0, 0, 0, 0.06)',
+          zIndex: (theme) => theme.zIndex.drawer + 1,
         }}
       >
         <Container maxWidth="lg">
           <Toolbar disableGutters sx={{ py: 0.5, minHeight: { xs: 64, sm: 72 } }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexShrink: 0 }}>
-              
               <Box>
                 <Typography
                   variant="h6"
@@ -636,18 +635,19 @@ const Header: React.FC<HeaderProps> = ({
         </Container>
       </AppBar>
 
-      {/* Delete Account Confirmation Dialog */}
+      {/* Spacer to prevent content from hiding behind fixed navbar */}
+      <Box sx={{ height: { xs: 64, sm: 72 } }} />
+
+      {/* Delete Account Confirmation Dialog - FIXED */}
       <Dialog
         open={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
-        slotProps={{
-          paper: {
-            sx: {
-              borderRadius: 4,
-              p: 2,
-              backgroundColor: colorMode?.mode === 'dark' ? '#1e1e1e' : '#ffffff',
-              border: colorMode?.mode === 'dark' ? '1px solid rgba(255,255,255,0.12)' : 'none',
-            },
+        PaperProps={{
+          sx: {
+            borderRadius: 4,
+            p: 2,
+            backgroundColor: colorMode?.mode === 'dark' ? '#1e1e1e' : '#ffffff',
+            border: colorMode?.mode === 'dark' ? '1px solid rgba(255,255,255,0.12)' : 'none',
           },
         }}
       >
