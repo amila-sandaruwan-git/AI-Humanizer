@@ -51,6 +51,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginDialog } from './components/LoginDialog';
 import { CommentSection } from './components/comments/CommentSection';
 import { theme as createAppTheme } from './styles/theme';
+import { Analytics } from '@vercel/analytics/react';
 import './App.css';
 
 export const ColorModeContext = createContext<{
@@ -895,6 +896,7 @@ function App() {
   return (
     <AuthProvider>
       <AppContent />
+      <Analytics />
     </AuthProvider>
   );
 }
