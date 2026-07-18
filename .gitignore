@@ -18,6 +18,20 @@
 .env.test.local
 .env.production.local
 
+
+# Electron
+dist-electron/
+*.dmg
+*.exe
+*.AppImage
+*.deb
+*.icns
+*.ico
+!public/icons/*.ico
+!public/icons/*.icns
+!public/icons/*.png
+
+
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

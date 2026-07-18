@@ -787,7 +787,7 @@ const AppContent: React.FC = () => {
           <Button 
             variant="outlined" 
             startIcon={<GitHub />}
-            href="https://github.com/yourusername/ai-humanizer"
+            href="https://github.com/amila-sandaruwan-git/AI-Humanizer"
             target="_blank"
             sx={{ 
               borderRadius: 2, 
