@@ -6,7 +6,6 @@ import {
   IconButton,
   Button,
   LinearProgress,
-  Alert,
 } from '@mui/material';
 import {
   CloudUpload,
@@ -17,14 +16,6 @@ import {
   InsertDriveFile,
 } from '@mui/icons-material';
 import { useToast } from '../context/ToastContext';
-
-// Dynamically import pdfjs-dist
-const getPDFJS = async () => {
-  const pdfjsLib = await import('pdfjs-dist');
-  // Set the worker source
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-  return pdfjsLib;
-};
 
 interface FileUploadProps {
   onFileContent: (content: string, fileName: string) => void;
@@ -100,9 +91,10 @@ const FileUpload: React.FC<FileUploadProps> = ({
 
   const readPDFFile = async (file: File): Promise<string> => {
     try {
-      const pdfjsLib = await getPDFJS();
-      const arrayBuffer = await file.arrayBuffer();
+      const pdfjsLib = await import('pdfjs-dist');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
       
+      const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       
       let fullText = '';
@@ -140,7 +132,6 @@ const FileUpload: React.FC<FileUploadProps> = ({
   };
 
   const handleFile = async (file: File) => {
-    // Check file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
       showError('File size exceeds 10MB limit');
       return;
@@ -156,7 +147,6 @@ const FileUpload: React.FC<FileUploadProps> = ({
     try {
       const content = await readFileContent(file);
       
-      // Structure the content with file info header
       const structuredContent = 
 `=== ${file.name} ===
 File Type: ${getFileType(file.name)}

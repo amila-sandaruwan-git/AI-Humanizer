@@ -16,20 +16,20 @@ export const theme = (mode: 'light' | 'dark') => createTheme({
             dark: '#f06292',
           },
           background: {
-            default: '#121212',
-            paper: '#1e1e1e',
+            default: '#0f0f1a', // Darker background
+            paper: '#1a1a2e', // Darker paper
           },
           text: {
-            primary: '#e0e0e0',
-            secondary: '#a0a0a0',
+            primary: '#e8e8f0', // Softer white
+            secondary: '#a0a0b8', // Muted gray
           },
-          divider: 'rgba(255,255,255,0.12)',
+          divider: 'rgba(255,255,255,0.06)',
         }
       : {
           primary: {
-            main: '#1976d2',
-            light: '#42a5f5',
-            dark: '#1565c0',
+            main: '#667eea',
+            light: '#818cf8',
+            dark: '#4f46e5',
           },
           secondary: {
             main: '#dc004e',
@@ -37,14 +37,14 @@ export const theme = (mode: 'light' | 'dark') => createTheme({
             dark: '#9a0036',
           },
           background: {
-            default: '#f5f7fa',
+            default: '#f0f2f5', // Softer background
             paper: '#ffffff',
           },
           text: {
-            primary: '#1a1a2e',
-            secondary: '#4a4a6a',
+            primary: '#1a1a2e', // Darker text
+            secondary: '#4a4a6a', // Softer secondary
           },
-          divider: 'rgba(0,0,0,0.12)',
+          divider: 'rgba(0,0,0,0.06)',
         }),
   },
   typography: {
@@ -59,38 +59,46 @@ export const theme = (mode: 'light' | 'dark') => createTheme({
       'sans-serif',
     ].join(','),
     h1: {
-      fontFamily: 'Playfair Display, serif',
+      fontFamily: 'Inter, sans-serif',
       fontWeight: 700,
+      color: mode === 'dark' ? '#e8e8f0' : '#1a1a2e',
     },
     h2: {
-      fontFamily: 'Playfair Display, serif',
+      fontFamily: 'Inter, sans-serif',
       fontWeight: 700,
+      color: mode === 'dark' ? '#e8e8f0' : '#1a1a2e',
     },
     h3: {
-      fontFamily: 'Playfair Display, serif',
+      fontFamily: 'Inter, sans-serif',
       fontWeight: 600,
+      color: mode === 'dark' ? '#e8e8f0' : '#1a1a2e',
     },
     h4: {
       fontFamily: 'Inter, sans-serif',
       fontWeight: 600,
+      color: mode === 'dark' ? '#e8e8f0' : '#1a1a2e',
     },
     h5: {
       fontFamily: 'Inter, sans-serif',
       fontWeight: 600,
+      color: mode === 'dark' ? '#e8e8f0' : '#1a1a2e',
     },
     h6: {
       fontFamily: 'Inter, sans-serif',
       fontWeight: 600,
+      color: mode === 'dark' ? '#e8e8f0' : '#1a1a2e',
     },
     body1: {
       fontFamily: 'Inter, sans-serif',
       fontSize: '1rem',
       lineHeight: 1.7,
+      color: mode === 'dark' ? '#d0d0dd' : '#1a1a2e',
     },
     body2: {
       fontFamily: 'Inter, sans-serif',
       fontSize: '0.875rem',
       lineHeight: 1.6,
+      color: mode === 'dark' ? '#b0b0c8' : '#2a2a4e',
     },
     button: {
       fontFamily: 'Inter, sans-serif',
@@ -100,12 +108,7 @@ export const theme = (mode: 'light' | 'dark') => createTheme({
     caption: {
       fontFamily: 'Inter, sans-serif',
       fontSize: '0.75rem',
-    },
-    overline: {
-      fontFamily: 'Inter, sans-serif',
-      fontWeight: 600,
-      textTransform: 'uppercase',
-      letterSpacing: '0.08em',
+      color: mode === 'dark' ? '#9090a8' : '#4a4a6a',
     },
   },
   components: {
@@ -117,6 +120,7 @@ export const theme = (mode: 'light' | 'dark') => createTheme({
           fontWeight: 600,
           fontFamily: 'Inter, sans-serif',
           padding: '8px 20px',
+          color: mode === 'dark' ? '#e8e8f0' : '#1a1a2e',
         },
       },
     },
@@ -125,8 +129,8 @@ export const theme = (mode: 'light' | 'dark') => createTheme({
         root: {
           borderRadius: 12,
           ...(mode === 'dark' && {
-            backgroundColor: '#1e1e1e',
-            borderColor: 'rgba(255,255,255,0.12)',
+            backgroundColor: '#1a1a2e',
+            borderColor: 'rgba(255,255,255,0.06)',
           }),
         },
       },
@@ -136,9 +140,9 @@ export const theme = (mode: 'light' | 'dark') => createTheme({
         root: {
           backdropFilter: 'blur(20px)',
           backgroundColor: mode === 'dark' 
-            ? 'rgba(18, 18, 18, 0.85)' 
+            ? 'rgba(15, 15, 26, 0.85)' 
             : 'rgba(255, 255, 255, 0.85)',
-          borderBottom: `1px solid ${mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`,
+          borderBottom: `1px solid ${mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'}`,
         },
       },
     },
@@ -149,7 +153,30 @@ export const theme = (mode: 'light' | 'dark') => createTheme({
             borderRadius: 8,
             fontFamily: 'Inter, sans-serif',
             ...(mode === 'dark' && {
-              backgroundColor: '#2d2d2d',
+              backgroundColor: 'rgba(255,255,255,0.04)',
+              color: '#e8e8f0',
+              '& .MuiOutlinedInput-notchedOutline': {
+                borderColor: 'rgba(255,255,255,0.08)',
+              },
+              '&:hover .MuiOutlinedInput-notchedOutline': {
+                borderColor: 'rgba(255,255,255,0.15)',
+              },
+              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                borderColor: '#667eea',
+              },
+            }),
+          },
+          '& .MuiInputLabel-root': {
+            ...(mode === 'dark' && {
+              color: '#a0a0b8',
+              '&.Mui-focused': {
+                color: '#90caf9',
+              },
+            }),
+          },
+          '& .MuiInputBase-input': {
+            ...(mode === 'dark' && {
+              color: '#e8e8f0',
             }),
           },
         },
@@ -159,8 +186,8 @@ export const theme = (mode: 'light' | 'dark') => createTheme({
       styleOverrides: {
         root: {
           ...(mode === 'dark' && {
-            backgroundColor: '#2d2d2d',
-            borderColor: 'rgba(255,255,255,0.12)',
+            backgroundColor: 'rgba(255,255,255,0.03)',
+            borderColor: 'rgba(255,255,255,0.06)',
           }),
         },
       },
@@ -169,6 +196,130 @@ export const theme = (mode: 'light' | 'dark') => createTheme({
       styleOverrides: {
         root: {
           fontFamily: 'Inter, sans-serif',
+          ...(mode === 'dark' && {
+            color: '#e8e8f0',
+          }),
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          ...(mode === 'dark' && {
+            color: '#e8e8f0',
+          }),
+        },
+      },
+    },
+    MuiSelect: {
+      styleOverrides: {
+        root: {
+          ...(mode === 'dark' && {
+            backgroundColor: 'rgba(255,255,255,0.04)',
+            color: '#e8e8f0',
+          }),
+        },
+        icon: {
+          ...(mode === 'dark' && {
+            color: '#a0a0b8',
+          }),
+        },
+      },
+    },
+    MuiMenuItem: {
+      styleOverrides: {
+        root: {
+          ...(mode === 'dark' && {
+            color: '#e8e8f0',
+            '&:hover': {
+              backgroundColor: 'rgba(255,255,255,0.04)',
+            },
+            '&.Mui-selected': {
+              backgroundColor: 'rgba(102,126,234,0.12)',
+              '&:hover': {
+                backgroundColor: 'rgba(102,126,234,0.16)',
+              },
+            },
+          }),
+        },
+      },
+    },
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          ...(mode === 'dark' && {
+            color: '#a0a0b8',
+          }),
+        },
+      },
+    },
+    MuiDivider: {
+      styleOverrides: {
+        root: {
+          ...(mode === 'dark' && {
+            borderColor: 'rgba(255,255,255,0.06)',
+          }),
+        },
+      },
+    },
+    MuiAlert: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          ...(mode === 'dark' && {
+            backgroundColor: 'rgba(255,255,255,0.04)',
+            color: '#e8e8f0',
+          }),
+        },
+      },
+    },
+    MuiSlider: {
+      styleOverrides: {
+        root: {
+          ...(mode === 'dark' && {
+            color: '#667eea',
+          }),
+        },
+        rail: {
+          ...(mode === 'dark' && {
+            backgroundColor: 'rgba(255,255,255,0.12)',
+          }),
+        },
+      },
+    },
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          ...(mode === 'dark' && {
+            backgroundColor: '#1a1a2e',
+          }),
+        },
+      },
+    },
+    MuiDialogTitle: {
+      styleOverrides: {
+        root: {
+          ...(mode === 'dark' && {
+            color: '#e8e8f0',
+          }),
+        },
+      },
+    },
+    MuiDialogContent: {
+      styleOverrides: {
+        root: {
+          ...(mode === 'dark' && {
+            color: '#d0d0dd',
+          }),
+        },
+      },
+    },
+    MuiDialogContentText: {
+      styleOverrides: {
+        root: {
+          ...(mode === 'dark' && {
+            color: '#b0b0c8',
+          }),
         },
       },
     },
