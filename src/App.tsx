@@ -1,4 +1,5 @@
 import { Analytics } from "@vercel/analytics/react"
+import { SpeedInsights } from '@vercel/speed-insights/react'
 
 import React, { createContext, useMemo, useState, useRef, useEffect } from 'react';
 import { ThemeProvider } from '@mui/material/styles';
@@ -918,6 +919,7 @@ function App() {
     <AuthProvider>
       <AppContent />
       <Analytics />
+      <SpeedInsights />
     </AuthProvider>
   );
 }
