@@ -197,12 +197,17 @@ const SingleComment = memo((props: SingleCommentProps) => {
     }
   };
 
+  // Updated handleVote with proper vote removal
   const handleVote = async (voteType: 'like' | 'dislike' | null) => {
     try {
+      // Call the service to update the vote in database
       await onVote(comment.id, voteType);
       
+      // Update local state optimistically
       const currentVote = localComment.user_vote;
+      
       if (currentVote === voteType) {
+        // Removing vote (clicked the same button)
         setLocalComment({
           ...localComment,
           user_vote: null,
@@ -210,12 +215,12 @@ const SingleComment = memo((props: SingleCommentProps) => {
           dislikes: localComment.dislikes - (voteType === 'dislike' ? 1 : 0),
         });
       } else {
+        // Changing vote or adding new vote
         let newLikes = localComment.likes;
         let newDislikes = localComment.dislikes;
         
         if (currentVote === 'like') newLikes--;
         if (currentVote === 'dislike') newDislikes--;
-        
         if (voteType === 'like') newLikes++;
         if (voteType === 'dislike') newDislikes++;
         
@@ -817,6 +822,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
     }
   };
 
+  // Updated handleVote with proper vote removal and optimistic updates
   const handleVote = async (commentId: string, voteType: 'like' | 'dislike' | null) => {
     if (!isAuthenticated) {
       if (onAuthRequired) onAuthRequired();
@@ -824,7 +830,72 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
     }
 
     try {
+      // Call the service to update the vote in database
       await commentService.voteComment(commentId, voteType);
+      
+      // Update local state optimistically
+      setComments((prev: CommentWithUser[]) => 
+        prev.map((c: CommentWithUser) => {
+          // Check if this is the comment we're voting on
+          if (c.id === commentId) {
+            const currentVote = c.user_vote;
+            let newLikes = c.likes;
+            let newDislikes = c.dislikes;
+            
+            if (currentVote === voteType) {
+              // Removing vote (clicked the same button)
+              if (voteType === 'like') newLikes--;
+              if (voteType === 'dislike') newDislikes--;
+              return { 
+                ...c, 
+                user_vote: null,
+                likes: Math.max(0, newLikes),
+                dislikes: Math.max(0, newDislikes),
+              };
+            } else {
+              // Changing vote or adding new vote
+              if (currentVote === 'like') newLikes--;
+              if (currentVote === 'dislike') newDislikes--;
+              if (voteType === 'like') newLikes++;
+              if (voteType === 'dislike') newDislikes++;
+              return { 
+                ...c, 
+                user_vote: voteType,
+                likes: Math.max(0, newLikes),
+                dislikes: Math.max(0, newDislikes),
+              };
+            }
+          }
+          
+          // Also check and update replies
+          if (c.replies) {
+            return {
+              ...c,
+              replies: c.replies.map((r: CommentWithUser) => {
+                if (r.id === commentId) {
+                  const currentVote = r.user_vote;
+                  let newLikes = r.likes;
+                  let newDislikes = r.dislikes;
+                  
+                  if (currentVote === voteType) {
+                    if (voteType === 'like') newLikes--;
+                    if (voteType === 'dislike') newDislikes--;
+                    return { ...r, user_vote: null, likes: Math.max(0, newLikes), dislikes: Math.max(0, newDislikes) };
+                  } else {
+                    if (currentVote === 'like') newLikes--;
+                    if (currentVote === 'dislike') newDislikes--;
+                    if (voteType === 'like') newLikes++;
+                    if (voteType === 'dislike') newDislikes++;
+                    return { ...r, user_vote: voteType, likes: Math.max(0, newLikes), dislikes: Math.max(0, newDislikes) };
+                  }
+                }
+                return r;
+              })
+            };
+          }
+          return c;
+        })
+      );
     } catch (error: any) {
       console.error('Error voting:', error);
       showError(error?.message || 'Failed to vote');

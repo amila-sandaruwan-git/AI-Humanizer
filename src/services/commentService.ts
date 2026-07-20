@@ -40,7 +40,6 @@ export const commentService = {
     try {
       console.log('Fetching comments...');
       
-      // First, fetch all comments without user join
       const { data: comments, error } = await supabase
         .from('comments')
         .select('*')
@@ -49,7 +48,6 @@ export const commentService = {
 
       if (error) {
         console.error('Error fetching comments:', error);
-        // Return empty array instead of throwing
         return [];
       }
 
@@ -59,16 +57,13 @@ export const commentService = {
         return [];
       }
 
-      // Get all user IDs from comments
       const userIds = [...new Set(comments.map(c => c.user_id))];
       
-      // Fetch all user profiles in one query
       const { data: profiles, error: profileError } = await supabase
         .from('profiles')
         .select('id, email, full_name, avatar_url')
         .in('id', userIds);
 
-      // Create a map of user data
       const userMap = new Map();
       
       if (profiles) {
@@ -83,14 +78,12 @@ export const commentService = {
         });
       }
 
-      // If profiles don't exist, try to get from auth
       if (profileError || !profiles || profiles.length === 0) {
         console.log('No profiles found, using auth data fallback');
         const { data: session } = await supabase.auth.getSession();
         const currentUser = session?.session?.user;
         
         if (currentUser) {
-          // Add current user's data if they have comments
           comments.forEach((comment: any) => {
             if (comment.user_id === currentUser.id && !userMap.has(currentUser.id)) {
               userMap.set(currentUser.id, {
@@ -107,7 +100,6 @@ export const commentService = {
         }
       }
 
-      // Get user votes for each comment
       const { data: session } = await supabase.auth.getSession();
       const userId = session?.session?.user?.id;
 
@@ -121,7 +113,6 @@ export const commentService = {
         votes?.forEach(v => voteMap.set(v.comment_id, v.vote_type));
       }
 
-      // Combine comment data with user data
       const commentsWithUser = comments.map((comment: any) => {
         const userData = userMap.get(comment.user_id) || {
           email: '',
@@ -139,7 +130,6 @@ export const commentService = {
         };
       });
 
-      // Get replies for each comment
       for (const comment of commentsWithUser) {
         const replies = await this.getReplies(comment.id);
         comment.replies = replies;
@@ -148,7 +138,6 @@ export const commentService = {
       return commentsWithUser;
     } catch (error) {
       console.error('Error in getComments:', error);
-      // Return empty array on error
       return [];
     }
   },
@@ -171,10 +160,8 @@ export const commentService = {
         return [];
       }
 
-      // Get user IDs from replies
       const userIds = [...new Set(replies.map(r => r.user_id))];
       
-      // Fetch user profiles
       const { data: profiles } = await supabase
         .from('profiles')
         .select('id, email, full_name, avatar_url')
@@ -193,7 +180,6 @@ export const commentService = {
         });
       }
 
-      // Get user votes
       const { data: session } = await supabase.auth.getSession();
       const userId = session?.session?.user?.id;
 
@@ -242,7 +228,6 @@ export const commentService = {
         throw new Error('You must be logged in to comment');
       }
 
-      // First, ensure profile exists
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('*')
@@ -279,7 +264,6 @@ export const commentService = {
         throw error;
       }
 
-      // Get user profile
       const { data: profile } = await supabase
         .from('profiles')
         .select('email, full_name, avatar_url')
@@ -328,13 +312,11 @@ export const commentService = {
   // Delete a comment
   async deleteComment(commentId: string): Promise<void> {
     try {
-      // Delete replies first
       await supabase
         .from('comments')
         .delete()
         .eq('parent_id', commentId);
 
-      // Delete the comment itself
       const { error } = await supabase
         .from('comments')
         .delete()
@@ -350,7 +332,7 @@ export const commentService = {
     }
   },
 
-  // Like or dislike a comment - UPDATED with better error handling and logging
+  // Like or dislike a comment - UPDATED with better vote removal
   async voteComment(commentId: string, voteType: 'like' | 'dislike' | null): Promise<void> {
     try {
       console.log(`Voting on comment ${commentId}: ${voteType}`);
@@ -376,7 +358,8 @@ export const commentService = {
 
       if (existingVote) {
         if (voteType === null) {
-          // Remove vote
+          // ✅ REMOVE VOTE - Delete from database
+          console.log(`Removing vote from comment ${commentId}`);
           const { error: deleteError } = await supabase
             .from('comment_votes')
             .delete()
@@ -387,9 +370,10 @@ export const commentService = {
             console.error('Error deleting vote:', deleteError);
             throw deleteError;
           }
-          console.log(`Vote removed from comment ${commentId}`);
+          console.log(`✅ Vote removed from comment ${commentId}`);
         } else if (existingVote.vote_type !== voteType) {
-          // Update vote
+          // Update vote from like to dislike or vice versa
+          console.log(`Updating vote on comment ${commentId} from ${existingVote.vote_type} to ${voteType}`);
           const { error: updateError } = await supabase
             .from('comment_votes')
             .update({ vote_type: voteType })
@@ -400,12 +384,13 @@ export const commentService = {
             console.error('Error updating vote:', updateError);
             throw updateError;
           }
-          console.log(`Vote updated on comment ${commentId} to ${voteType}`);
+          console.log(`✅ Vote updated on comment ${commentId} to ${voteType}`);
         } else {
           console.log(`Vote already ${voteType} on comment ${commentId}`);
         }
       } else if (voteType !== null) {
         // Insert new vote
+        console.log(`Adding new ${voteType} to comment ${commentId}`);
         const { error: insertError } = await supabase
           .from('comment_votes')
           .insert({
@@ -418,7 +403,7 @@ export const commentService = {
           console.error('Error inserting vote:', insertError);
           throw insertError;
         }
-        console.log(`New ${voteType} added to comment ${commentId}`);
+        console.log(`✅ New ${voteType} added to comment ${commentId}`);
       }
     } catch (error) {
       console.error('Error in voteComment:', error);
