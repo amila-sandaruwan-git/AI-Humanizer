@@ -350,9 +350,11 @@ export const commentService = {
     }
   },
 
-  // Like or dislike a comment
+  // Like or dislike a comment - UPDATED with better error handling and logging
   async voteComment(commentId: string, voteType: 'like' | 'dislike' | null): Promise<void> {
     try {
+      console.log(`Voting on comment ${commentId}: ${voteType}`);
+      
       const { data: session } = await supabase.auth.getSession();
       const userId = session?.session?.user?.id;
 
@@ -360,39 +362,120 @@ export const commentService = {
         throw new Error('You must be logged in to vote');
       }
 
-      const { data: existingVote } = await supabase
+      // Check if user already voted
+      const { data: existingVote, error: fetchError } = await supabase
         .from('comment_votes')
         .select('*')
         .eq('comment_id', commentId)
         .eq('user_id', userId)
         .maybeSingle();
 
+      if (fetchError) {
+        console.error('Error fetching existing vote:', fetchError);
+      }
+
       if (existingVote) {
         if (voteType === null) {
-          await supabase
+          // Remove vote
+          const { error: deleteError } = await supabase
             .from('comment_votes')
             .delete()
             .eq('comment_id', commentId)
             .eq('user_id', userId);
+            
+          if (deleteError) {
+            console.error('Error deleting vote:', deleteError);
+            throw deleteError;
+          }
+          console.log(`Vote removed from comment ${commentId}`);
         } else if (existingVote.vote_type !== voteType) {
-          await supabase
+          // Update vote
+          const { error: updateError } = await supabase
             .from('comment_votes')
             .update({ vote_type: voteType })
             .eq('comment_id', commentId)
             .eq('user_id', userId);
+            
+          if (updateError) {
+            console.error('Error updating vote:', updateError);
+            throw updateError;
+          }
+          console.log(`Vote updated on comment ${commentId} to ${voteType}`);
+        } else {
+          console.log(`Vote already ${voteType} on comment ${commentId}`);
         }
       } else if (voteType !== null) {
-        await supabase
+        // Insert new vote
+        const { error: insertError } = await supabase
           .from('comment_votes')
           .insert({
             comment_id: commentId,
             user_id: userId,
             vote_type: voteType,
           });
+          
+        if (insertError) {
+          console.error('Error inserting vote:', insertError);
+          throw insertError;
+        }
+        console.log(`New ${voteType} added to comment ${commentId}`);
       }
     } catch (error) {
       console.error('Error in voteComment:', error);
       throw error;
+    }
+  },
+
+  // Get vote count for a specific comment
+  async getVoteCount(commentId: string): Promise<{ likes: number; dislikes: number }> {
+    try {
+      const { data: comment, error } = await supabase
+        .from('comments')
+        .select('likes, dislikes')
+        .eq('id', commentId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching vote count:', error);
+        return { likes: 0, dislikes: 0 };
+      }
+
+      return {
+        likes: comment?.likes || 0,
+        dislikes: comment?.dislikes || 0,
+      };
+    } catch (error) {
+      console.error('Error in getVoteCount:', error);
+      return { likes: 0, dislikes: 0 };
+    }
+  },
+
+  // Get user's vote on a comment
+  async getUserVote(commentId: string): Promise<'like' | 'dislike' | null> {
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const userId = session?.session?.user?.id;
+
+      if (!userId) {
+        return null;
+      }
+
+      const { data: vote, error } = await supabase
+        .from('comment_votes')
+        .select('vote_type')
+        .eq('comment_id', commentId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching user vote:', error);
+        return null;
+      }
+
+      return vote?.vote_type || null;
+    } catch (error) {
+      console.error('Error in getUserVote:', error);
+      return null;
     }
   }
 };
