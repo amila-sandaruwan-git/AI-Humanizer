@@ -18,7 +18,6 @@ import {
   Fade,
   useMediaQuery,
   useTheme,
-  Paper,
 } from '@mui/material';
 import {
   Reply,
@@ -109,8 +108,8 @@ const SingleComment: React.FC<{
       await onEdit(comment.id, editContent);
       setEditingComment(null);
       showSuccess('Comment updated!');
-    } catch (error) {
-      showError('Failed to update comment');
+    } catch (error: any) {
+      showError(error.message || 'Failed to update comment');
     }
   };
 
@@ -180,25 +179,24 @@ const SingleComment: React.FC<{
       sx={{ 
         ml: isReply ? (isMobile ? 2 : 3) : 0,
         pl: isReply ? (isMobile ? 1.5 : 2) : 0,
-        borderLeft: isReply ? `2px solid ${avatarColor}40` : 'none',
+        borderLeft: isReply ? `2px solid ${avatarColor}30` : 'none',
         position: 'relative',
         transition: 'all 0.2s ease',
+        pt: 1,
+        pb: 0.5,
       }}
     >
       <Fade in={true} timeout={200}>
-        <Paper
-          elevation={0}
+        <Box
           sx={{
             p: isMobile ? 1.5 : 2,
             mb: 0.5,
             borderRadius: 2,
-            backgroundColor: isReply ? 'rgba(0,0,0,0.02)' : 'transparent',
+            backgroundColor: 'transparent',
             transition: 'all 0.2s ease',
-            border: '1px solid',
-            borderColor: 'transparent',
+            border: 'none',
             '&:hover': {
-              backgroundColor: isReply ? 'rgba(0,0,0,0.04)' : 'rgba(0,0,0,0.02)',
-              borderColor: 'divider',
+              backgroundColor: isReply ? 'rgba(0,0,0,0.02)' : 'transparent',
             },
           }}
         >
@@ -466,7 +464,7 @@ const SingleComment: React.FC<{
               ))}
             </Box>
           )}
-        </Paper>
+        </Box>
       </Fade>
     </Box>
   );
@@ -648,14 +646,43 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
     }
   };
 
+  // FIXED: Edit comment with proper state update and error handling
   const handleEditComment = async (commentId: string, content: string) => {
     if (!userEmail) {
       showError('You must be logged in to edit');
       return;
     }
-    await commentService.updateComment(commentId, content, userEmail);
+    try {
+      console.log(`✏️ Attempting to edit comment ${commentId}`);
+      await commentService.updateComment(commentId, content, userEmail);
+      console.log(`✅ Comment ${commentId} edited successfully`);
+      
+      // Update local state
+      setComments(prev => 
+        prev.map(c => {
+          if (c.id === commentId) {
+            return { ...c, content };
+          }
+          if (c.replies) {
+            return {
+              ...c,
+              replies: c.replies.map(r => 
+                r.id === commentId ? { ...r, content } : r
+              )
+            };
+          }
+          return c;
+        })
+      );
+      showSuccess('Comment updated!');
+    } catch (error: any) {
+      console.error('Error editing comment:', error);
+      showError(error.message || 'Failed to edit comment');
+      throw error;
+    }
   };
 
+  // FIXED: Delete comment with proper state update and error handling
   const handleDeleteComment = async (commentId: string) => {
     if (!window.confirm('Delete this comment?')) return;
     if (!userEmail) {
@@ -663,11 +690,23 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
       return;
     }
     try {
+      console.log(`🗑️ Attempting to delete comment ${commentId}`);
       await commentService.deleteComment(commentId, userEmail);
+      console.log(`✅ Comment ${commentId} deleted successfully`);
+      
+      // Update local state - remove the comment and its replies
+      setComments(prev => 
+        prev
+          .filter(c => c.id !== commentId)
+          .map(c => ({
+            ...c,
+            replies: c.replies?.filter(r => r.id !== commentId) || []
+          }))
+      );
       showSuccess('Comment deleted!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting comment:', error);
-      showError('Failed to delete comment');
+      showError(error.message || 'Failed to delete comment');
     }
   };
 
@@ -687,6 +726,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
   return (
     <>
       <Box sx={{ p: isMobile ? 2 : 3, mt: isMobile ? 2 : 3, borderRadius: isMobile ? 2 : 3 }}>
+        {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: isMobile ? 2 : 3, flexWrap: 'wrap', gap: 1 }}>
           <Typography variant={isMobile ? 'subtitle1' : 'h6'} sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
             💬 Discussion
@@ -720,18 +760,10 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
           mb: isMobile ? 2 : 3, 
           p: isMobile ? 1.5 : 2,
           borderRadius: 2,
-          bgcolor: 'action.hover',
           display: 'flex',
           gap: isMobile ? 1.5 : 2,
           alignItems: 'flex-start',
-          border: '1px solid',
-          borderColor: 'transparent',
           transition: 'all 0.2s ease',
-          '&:focus-within': {
-            borderColor: 'primary.main',
-            bgcolor: 'background.paper',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-          },
         }}>
           <Avatar sx={{ width: isMobile ? 32 : 40, height: isMobile ? 32 : 40, bgcolor: '#667eea' }}>
             <Person />

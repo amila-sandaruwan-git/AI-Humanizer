@@ -223,6 +223,57 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
     showInfo(`Style changed to: ${value.charAt(0).toUpperCase() + value.slice(1)}`);
   };
 
+  // Get intensity color based on value
+  const getIntensityColor = (value: number) => {
+    switch (value) {
+      case 1: return '#90CAF9';
+      case 2: return '#64B5F6';
+      case 3: return '#42A5F5';
+      default: return '#90CAF9';
+    }
+  };
+
+  const getIntensityGlow = (value: number) => {
+    switch (value) {
+      case 1: return 'rgba(144, 202, 249, 0.3)';
+      case 2: return 'rgba(100, 181, 246, 0.35)';
+      case 3: return 'rgba(66, 165, 245, 0.4)';
+      default: return 'rgba(144, 202, 249, 0.3)';
+    }
+  };
+
+  const sliderValue = intensity === 'light' ? 1 : intensity === 'medium' ? 2 : 3;
+
+  const gradientStart = '#BBDEFB';
+  const gradientMid = '#90CAF9';
+  const gradientEnd = '#64B5F6';
+
+  // Rich dropdown options without icons
+  const toneOptions = [
+    { value: 'professional', label: 'Professional', description: 'Formal business language' },
+    { value: 'casual', label: 'Casual', description: 'Relaxed conversational tone' },
+    { value: 'academic', label: 'Academic', description: 'Scholarly and formal' },
+    { value: 'creative', label: 'Creative', description: 'Descriptive and expressive' },
+  ];
+
+  const styleOptions = [
+    { value: 'concise', label: 'Concise', description: 'Short and direct' },
+    { value: 'balanced', label: 'Balanced', description: 'Well-structured' },
+    { value: 'detailed', label: 'Detailed', description: 'In-depth and thorough' },
+  ];
+
+  const intensityOptions = [
+    { value: 'light', label: 'Light', description: '55% word replacement' },
+    { value: 'medium', label: 'Medium', description: '75% word replacement' },
+    { value: 'heavy', label: 'Heavy', description: '98% word replacement' },
+  ];
+
+  // Get active option color
+  const getActiveColor = (value: string, options: any[]) => {
+    const option = options.find(o => o.value === value);
+    return option ? option.color : '#667eea';
+  };
+
   return (
     <Box sx={{ maxWidth: 1200, mx: 'auto', p: 3 }}>
       <Paper 
@@ -463,13 +514,21 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
           </Box>
         </Box>
 
-        {/* Controls Section */}
+        {/* ========== RICH DROPDOWN SECTIONS - WITHOUT ICONS ========== */}
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2.5} sx={{ mb: 3.5 }}>
+          {/* Tone Dropdown - Rich Design */}
           <FormControl fullWidth>
-            <InputLabel sx={{ 
-              fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
-              fontSize: '0.875rem',
-            }}>
+            <InputLabel 
+              sx={{ 
+                fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)',
+                '&.Mui-focused': {
+                  color: isDark ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.7)',
+                },
+              }}
+            >
               Tone
             </InputLabel>
             <Select
@@ -478,32 +537,108 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
               label="Tone"
               disabled={loading}
               sx={{
-                borderRadius: 2,
+                borderRadius: 2.5,
                 fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
+                backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                transition: 'all 0.25s ease',
                 '& .MuiSelect-select': {
                   py: 1.75,
                   fontSize: '0.875rem',
+                  fontWeight: 500,
                 },
                 '& .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'divider',
+                  borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+                  borderWidth: 1.5,
                 },
                 '&:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'primary.main',
+                  borderColor: isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.2)',
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#667eea',
+                  borderWidth: 2,
                 },
               }}
+              renderValue={(selected) => {
+                const option = toneOptions.find(o => o.value === selected);
+                return (
+                  <Typography sx={{ fontWeight: 500, fontSize: '0.875rem', color: 'text.primary' }}>
+                    {option?.label}
+                  </Typography>
+                );
+              }}
             >
-              <MenuItem value="professional">Professional</MenuItem>
-              <MenuItem value="casual">Casual</MenuItem>
-              <MenuItem value="academic">Academic</MenuItem>
-              <MenuItem value="creative">Creative</MenuItem>
+              {toneOptions.map((option) => (
+                <MenuItem 
+                  key={option.value} 
+                  value={option.value}
+                  sx={{
+                    py: 1.5,
+                    px: 2.5,
+                    borderRadius: 1.5,
+                    mx: 1,
+                    my: 0.5,
+                    transition: 'all 0.2s ease',
+                    backgroundColor: tone === option.value ? 'rgba(102, 126, 234, 0.08)' : 'transparent',
+                    border: '1px solid',
+                    borderColor: tone === option.value ? 'rgba(102, 126, 234, 0.2)' : 'transparent',
+                    '&:hover': {
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                    },
+                    '&.Mui-selected': {
+                      backgroundColor: 'rgba(102, 126, 234, 0.12)',
+                      '&:hover': {
+                        backgroundColor: 'rgba(102, 126, 234, 0.18)',
+                      },
+                    },
+                  }}
+                >
+                  <Box sx={{ flex: 1 }}>
+                    <Typography sx={{ 
+                      fontWeight: tone === option.value ? 600 : 500, 
+                      fontSize: '0.875rem',
+                      color: tone === option.value ? '#667eea' : 'text.primary',
+                    }}>
+                      {option.label}
+                    </Typography>
+                    <Typography sx={{ 
+                      fontSize: '0.7rem', 
+                      color: tone === option.value ? 'rgba(102, 126, 234, 0.8)' : 'text.secondary',
+                      opacity: 0.8,
+                      mt: 0.25,
+                    }}>
+                      {option.description}
+                    </Typography>
+                  </Box>
+                  {tone === option.value && (
+                    <Box
+                      sx={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        backgroundColor: '#667eea',
+                        boxShadow: '0 0 12px rgba(102, 126, 234, 0.5)',
+                        ml: 1,
+                      }}
+                    />
+                  )}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
 
+          {/* Style Dropdown - Rich Design */}
           <FormControl fullWidth>
-            <InputLabel sx={{ 
-              fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
-              fontSize: '0.875rem',
-            }}>
+            <InputLabel 
+              sx={{ 
+                fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)',
+                '&.Mui-focused': {
+                  color: isDark ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.7)',
+                },
+              }}
+            >
               Style
             </InputLabel>
             <Select
@@ -512,31 +647,108 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
               label="Style"
               disabled={loading}
               sx={{
-                borderRadius: 2,
+                borderRadius: 2.5,
                 fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
+                backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                transition: 'all 0.25s ease',
                 '& .MuiSelect-select': {
                   py: 1.75,
                   fontSize: '0.875rem',
+                  fontWeight: 500,
                 },
                 '& .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'divider',
+                  borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+                  borderWidth: 1.5,
                 },
                 '&:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'primary.main',
+                  borderColor: isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.2)',
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#667eea',
+                  borderWidth: 2,
                 },
               }}
+              renderValue={(selected) => {
+                const option = styleOptions.find(o => o.value === selected);
+                return (
+                  <Typography sx={{ fontWeight: 500, fontSize: '0.875rem', color: 'text.primary' }}>
+                    {option?.label}
+                  </Typography>
+                );
+              }}
             >
-              <MenuItem value="concise">Concise</MenuItem>
-              <MenuItem value="balanced">Balanced</MenuItem>
-              <MenuItem value="detailed">Detailed</MenuItem>
+              {styleOptions.map((option) => (
+                <MenuItem 
+                  key={option.value} 
+                  value={option.value}
+                  sx={{
+                    py: 1.5,
+                    px: 2.5,
+                    borderRadius: 1.5,
+                    mx: 1,
+                    my: 0.5,
+                    transition: 'all 0.2s ease',
+                    backgroundColor: style === option.value ? 'rgba(102, 126, 234, 0.08)' : 'transparent',
+                    border: '1px solid',
+                    borderColor: style === option.value ? 'rgba(102, 126, 234, 0.2)' : 'transparent',
+                    '&:hover': {
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                    },
+                    '&.Mui-selected': {
+                      backgroundColor: 'rgba(102, 126, 234, 0.12)',
+                      '&:hover': {
+                        backgroundColor: 'rgba(102, 126, 234, 0.18)',
+                      },
+                    },
+                  }}
+                >
+                  <Box sx={{ flex: 1 }}>
+                    <Typography sx={{ 
+                      fontWeight: style === option.value ? 600 : 500, 
+                      fontSize: '0.875rem',
+                      color: style === option.value ? '#667eea' : 'text.primary',
+                    }}>
+                      {option.label}
+                    </Typography>
+                    <Typography sx={{ 
+                      fontSize: '0.7rem', 
+                      color: style === option.value ? 'rgba(102, 126, 234, 0.8)' : 'text.secondary',
+                      opacity: 0.8,
+                      mt: 0.25,
+                    }}>
+                      {option.description}
+                    </Typography>
+                  </Box>
+                  {style === option.value && (
+                    <Box
+                      sx={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        backgroundColor: '#667eea',
+                        boxShadow: '0 0 12px rgba(102, 126, 234, 0.5)',
+                        ml: 1,
+                      }}
+                    />
+                  )}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
 
+          {/* Intensity Dropdown - Rich Design */}
           <FormControl fullWidth>
-            <InputLabel sx={{ 
-              fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
-              fontSize: '0.875rem',
-            }}>
+            <InputLabel 
+              sx={{ 
+                fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)',
+                '&.Mui-focused': {
+                  color: isDark ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.7)',
+                },
+              }}
+            >
               Intensity
             </InputLabel>
             <Select
@@ -545,41 +757,132 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
               label="Intensity"
               disabled={loading}
               sx={{
-                borderRadius: 2,
+                borderRadius: 2.5,
                 fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
+                backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                transition: 'all 0.25s ease',
                 '& .MuiSelect-select': {
                   py: 1.75,
                   fontSize: '0.875rem',
+                  fontWeight: 500,
                 },
                 '& .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'divider',
+                  borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+                  borderWidth: 1.5,
                 },
                 '&:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'primary.main',
+                  borderColor: isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.2)',
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#667eea',
+                  borderWidth: 2,
                 },
               }}
+              renderValue={(selected) => {
+                const option = intensityOptions.find(o => o.value === selected);
+                return (
+                  <Typography sx={{ fontWeight: 500, fontSize: '0.875rem', color: 'text.primary' }}>
+                    {option?.label}
+                  </Typography>
+                );
+              }}
             >
-              <MenuItem value="light">Light</MenuItem>
-              <MenuItem value="medium">Medium</MenuItem>
-              <MenuItem value="heavy">Heavy</MenuItem>
+              {intensityOptions.map((option) => (
+                <MenuItem 
+                  key={option.value} 
+                  value={option.value}
+                  sx={{
+                    py: 1.5,
+                    px: 2.5,
+                    borderRadius: 1.5,
+                    mx: 1,
+                    my: 0.5,
+                    transition: 'all 0.2s ease',
+                    backgroundColor: intensity === option.value ? 'rgba(102, 126, 234, 0.08)' : 'transparent',
+                    border: '1px solid',
+                    borderColor: intensity === option.value ? 'rgba(102, 126, 234, 0.2)' : 'transparent',
+                    '&:hover': {
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                    },
+                    '&.Mui-selected': {
+                      backgroundColor: 'rgba(102, 126, 234, 0.12)',
+                      '&:hover': {
+                        backgroundColor: 'rgba(102, 126, 234, 0.18)',
+                      },
+                    },
+                  }}
+                >
+                  <Box sx={{ flex: 1 }}>
+                    <Typography sx={{ 
+                      fontWeight: intensity === option.value ? 600 : 500, 
+                      fontSize: '0.875rem',
+                      color: intensity === option.value ? '#667eea' : 'text.primary',
+                    }}>
+                      {option.label}
+                    </Typography>
+                    <Typography sx={{ 
+                      fontSize: '0.7rem', 
+                      color: intensity === option.value ? 'rgba(102, 126, 234, 0.8)' : 'text.secondary',
+                      opacity: 0.8,
+                      mt: 0.25,
+                    }}>
+                      {option.description}
+                    </Typography>
+                  </Box>
+                  {intensity === option.value && (
+                    <Box
+                      sx={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        backgroundColor: '#667eea',
+                        boxShadow: '0 0 12px rgba(102, 126, 234, 0.5)',
+                        ml: 1,
+                      }}
+                    />
+                  )}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
         </Stack>
+        {/* ========== END RICH DROPDOWN SECTIONS ========== */}
 
         {/* Intensity Slider */}
-        <Box sx={{ mb: 4, px: 1 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+        <Box sx={{ mb: 3, px: 1 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
             <Typography variant="body2" sx={{ 
               fontWeight: 600,
               fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
-              fontSize: '0.875rem',
+              fontSize: '0.8125rem',
               color: 'text.primary',
             }}>
               Rewriting Intensity
             </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  backgroundColor: getIntensityColor(sliderValue),
+                  transition: 'background-color 0.3s ease',
+                  boxShadow: `0 0 8px ${getIntensityGlow(sliderValue)}`,
+                }}
+              />
+              <Typography variant="caption" sx={{ 
+                fontWeight: 600,
+                color: getIntensityColor(sliderValue),
+                transition: 'color 0.3s ease',
+                fontSize: '0.7rem',
+              }}>
+                {intensity.charAt(0).toUpperCase() + intensity.slice(1)}
+              </Typography>
+            </Box>
           </Box>
+          
           <Slider
-            value={intensity === 'light' ? 1 : intensity === 'medium' ? 2 : 3}
+            value={sliderValue}
             onChange={(_, value) => {
               const levels: IntensityType[] = ['light', 'medium', 'heavy'];
               const newIntensity = levels[value as number - 1];
@@ -591,30 +894,54 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
             disabled={loading}
             sx={{
               '& .MuiSlider-track': {
-                background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
-                borderRadius: 4,
-                height: 6,
+                background: `linear-gradient(90deg, ${gradientStart} 0%, ${gradientMid} 50%, ${gradientEnd} 100%)`,
+                borderRadius: 3,
+                height: 5,
+                transition: 'all 0.3s ease',
               },
               '& .MuiSlider-rail': {
-                backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
-                height: 6,
-                borderRadius: 4,
+                backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                height: 5,
+                borderRadius: 3,
               },
               '& .MuiSlider-thumb': {
-                width: 22,
-                height: 22,
-                backgroundColor: '#667eea',
-                boxShadow: '0 2px 12px rgba(102, 126, 234, 0.4)',
+                width: 18,
+                height: 18,
+                backgroundColor: getIntensityColor(sliderValue),
+                boxShadow: `0 2px 8px ${getIntensityGlow(sliderValue)}`,
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 '&:hover': {
-                  boxShadow: '0 4px 20px rgba(102, 126, 234, 0.5)',
+                  boxShadow: `0 2px 12px ${getIntensityGlow(sliderValue)}`,
+                  transform: 'scale(1.05)',
                 },
                 '& .MuiSlider-valueLabel': {
-                  backgroundColor: 'primary.main',
-                  borderRadius: 2,
-                  padding: '2px 8px',
-                  fontSize: '0.75rem',
+                  backgroundColor: getIntensityColor(sliderValue),
+                  borderRadius: 1.5,
+                  padding: '1px 8px',
+                  fontSize: '0.65rem',
                   fontWeight: 600,
+                  color: '#fff',
+                  boxShadow: `0 2px 8px ${getIntensityGlow(sliderValue)}`,
                 },
+              },
+              '& .MuiSlider-mark': {
+                backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.06)',
+                height: 8,
+                width: 8,
+                borderRadius: '50%',
+                transition: 'all 0.3s ease',
+                '&.MuiSlider-markActive': {
+                  backgroundColor: getIntensityColor(sliderValue),
+                  boxShadow: `0 0 8px ${getIntensityGlow(sliderValue)}`,
+                  transform: 'scale(1.1)',
+                },
+              },
+              '& .MuiSlider-markLabel': {
+                color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)',
+                fontSize: '0.65rem',
+                fontWeight: 500,
+                fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
+                transition: 'all 0.3s ease',
               },
             }}
             marks={[
@@ -623,6 +950,74 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
               { value: 3, label: 'Heavy' },
             ]}
           />
+          
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            mt: 0.25,
+            px: 0.5,
+          }}>
+            <Typography variant="caption" sx={{ 
+              color: sliderValue === 1 ? '#90CAF9' : isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)',
+              fontWeight: sliderValue === 1 ? 500 : 400,
+              transition: 'all 0.3s ease',
+              fontSize: '0.55rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              letterSpacing: '0.02em',
+            }}>
+              <span style={{ 
+                display: 'inline-block', 
+                width: 4, 
+                height: 4, 
+                borderRadius: '50%', 
+                backgroundColor: '#90CAF9',
+                opacity: sliderValue === 1 ? 0.8 : 0.2,
+              }} />
+              Gentle
+            </Typography>
+            <Typography variant="caption" sx={{ 
+              color: sliderValue === 2 ? '#64B5F6' : isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)',
+              fontWeight: sliderValue === 2 ? 500 : 400,
+              transition: 'all 0.3s ease',
+              fontSize: '0.55rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              letterSpacing: '0.02em',
+            }}>
+              <span style={{ 
+                display: 'inline-block', 
+                width: 4, 
+                height: 4, 
+                borderRadius: '50%', 
+                backgroundColor: '#64B5F6',
+                opacity: sliderValue === 2 ? 0.8 : 0.2,
+              }} />
+              Moderate
+            </Typography>
+            <Typography variant="caption" sx={{ 
+              color: sliderValue === 3 ? '#42A5F5' : isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)',
+              fontWeight: sliderValue === 3 ? 500 : 400,
+              transition: 'all 0.3s ease',
+              fontSize: '0.55rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              letterSpacing: '0.02em',
+            }}>
+              <span style={{ 
+                display: 'inline-block', 
+                width: 4, 
+                height: 4, 
+                borderRadius: '50%', 
+                backgroundColor: '#42A5F5',
+                opacity: sliderValue === 3 ? 0.8 : 0.2,
+              }} />
+              Aggressive
+            </Typography>
+          </Box>
         </Box>
 
         {/* Action Buttons */}
@@ -637,29 +1032,52 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
             size="large"
             onClick={handleHumanize}
             disabled={loading || !text.trim()}
-            startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <AutoAwesome />}
+            startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <AutoAwesome sx={{ fontSize: 22 }} />}
             sx={{
               borderRadius: 3,
-              px: 4,
-              py: 1.75,
+              px: 5,
+              py: 2,
               fontWeight: 700,
-              fontSize: '0.9375rem',
+              fontSize: '1rem',
               fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
               textTransform: 'none',
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: '#fff',
               boxShadow: '0 4px 24px rgba(102, 126, 234, 0.35)',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              border: 'none',
+              position: 'relative',
+              overflow: 'hidden',
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: '-100%',
+                width: '100%',
+                height: '100%',
+                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)',
+                transition: 'all 0.6s ease',
+              },
               '&:hover': {
-                boxShadow: '0 6px 32px rgba(102, 126, 234, 0.5)',
-                transform: 'translateY(-2px)',
+                boxShadow: '0 8px 40px rgba(102, 126, 234, 0.5)',
+                transform: 'translateY(-3px) scale(1.02)',
+                '&::before': {
+                  left: '100%',
+                },
+              },
+              '&:active': {
+                transform: 'scale(0.96)',
+                boxShadow: '0 2px 12px rgba(102, 126, 234, 0.3)',
               },
               '&:disabled': {
                 background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
                 boxShadow: 'none',
                 transform: 'none',
+                color: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)',
               },
             }}
           >
-            {loading ? 'Humanizing...' : 'Humanize Text'}
+            {loading ? 'Humanizing...' : '✨ Humanize Text'}
           </Button>
           
           <Button
@@ -667,24 +1085,36 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
             size="large"
             onClick={handleClear}
             disabled={loading || !text}
+            startIcon={<Clear sx={{ fontSize: 22 }} />}
             sx={{
               borderRadius: 3,
-              px: 3,
-              py: 1.75,
+              px: 4,
+              py: 2,
               fontWeight: 600,
               fontSize: '0.9375rem',
               fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
               textTransform: 'none',
-              borderColor: 'divider',
-              transition: 'all 0.2s ease',
+              borderColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)',
+              color: isDark ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.7)',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              backgroundColor: 'transparent',
               '&:hover': {
-                borderColor: 'error.main',
-                color: 'error.main',
-                backgroundColor: alpha(theme.palette.error.main, 0.04),
+                borderColor: '#ef4444',
+                color: '#ef4444',
+                backgroundColor: alpha('#ef4444', 0.06),
+                transform: 'translateY(-2px)',
+                boxShadow: '0 4px 20px rgba(239, 68, 68, 0.15)',
+              },
+              '&:active': {
+                transform: 'scale(0.96)',
+              },
+              '&:disabled': {
+                borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                color: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)',
               },
             }}
           >
-            Clear
+            Clear All
           </Button>
         </Box>
 

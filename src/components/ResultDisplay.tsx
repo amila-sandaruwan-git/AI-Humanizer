@@ -1,7 +1,3 @@
-// src/components/ResultDisplay.tsx
-
-
-
 import React, { useState } from 'react';
 import {
   Box,
@@ -129,6 +125,119 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, onCopy }) => {
     if (score >= 70) return '#ef4444';
     if (score >= 50) return '#f59e0b';
     return '#22c55e';
+  };
+
+  // Format the text to preserve structure (paragraphs, line breaks, bullet points)
+  const formatText = (text: string): React.ReactNode => {
+    if (!text) return null;
+
+    // Split by paragraphs (double newline)
+    const paragraphs = text.split(/\n\s*\n/);
+    
+    return paragraphs.map((paragraph, pIndex) => {
+      // Split by lines within paragraph
+      const lines = paragraph.split(/\n/);
+      
+      // Check if it's a bullet list
+      const hasBullets = lines.some(line => /^[•·▪◦●■□*\-+]|\d+[.)]/.test(line.trim()));
+      
+      return (
+        <Box key={pIndex} sx={{ mb: pIndex < paragraphs.length - 1 ? 2 : 0 }}>
+          {lines.map((line, lIndex) => {
+            const trimmed = line.trim();
+            if (!trimmed) return <br key={lIndex} />;
+            
+            // Check for bullet point
+            const bulletMatch = trimmed.match(/^(\s*)([•·▪◦●■□*\-+]|\d+[.)]|[a-zA-Z][.)])(\s+)/);
+            if (bulletMatch) {
+              const indent = bulletMatch[1] || '';
+              const bullet = bulletMatch[2] || '';
+              const space = bulletMatch[3] || '';
+              const content = trimmed.substring(bulletMatch[0].length);
+              
+              return (
+                <Box 
+                  key={lIndex} 
+                  sx={{ 
+                    display: 'flex', 
+                    alignItems: 'flex-start', 
+                    gap: 0.5,
+                    pl: indent,
+                    py: 0.25,
+                  }}
+                >
+                  <Typography 
+                    component="span" 
+                    sx={{ 
+                      color: 'text.primary',
+                      fontWeight: 600,
+                      minWidth: 20,
+                      fontSize: '0.875rem',
+                    }}
+                  >
+                    {bullet}
+                  </Typography>
+                  <Typography 
+                    component="span" 
+                    sx={{ 
+                      color: 'text.primary',
+                      fontSize: '0.9375rem',
+                      lineHeight: 1.7,
+                      flex: 1,
+                    }}
+                  >
+                    {content}
+                  </Typography>
+                </Box>
+              );
+            }
+            
+            // Check for heading (##, ###, etc.)
+            const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)/);
+            if (headingMatch) {
+              const level = headingMatch[1].length;
+              const content = headingMatch[2];
+              const fontSize = level === 1 ? '1.5rem' : level === 2 ? '1.25rem' : level === 3 ? '1.125rem' : '1rem';
+              const fontWeight = level <= 3 ? 700 : 600;
+              
+              return (
+                <Typography 
+                  key={lIndex}
+                  variant="body1"
+                  sx={{ 
+                    fontWeight: fontWeight,
+                    fontSize: fontSize,
+                    color: 'text.primary',
+                    mt: lIndex > 0 ? 1.5 : 0,
+                    mb: 0.5,
+                    fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
+                  }}
+                >
+                  {content}
+                </Typography>
+              );
+            }
+            
+            // Regular line
+            return (
+              <Typography 
+                key={lIndex}
+                variant="body2"
+                sx={{ 
+                  color: 'text.primary',
+                  fontSize: '0.9375rem',
+                  lineHeight: 1.7,
+                  py: 0.25,
+                  fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
+                }}
+              >
+                {trimmed}
+              </Typography>
+            );
+          })}
+        </Box>
+      );
+    });
   };
 
   return (
@@ -259,10 +368,9 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, onCopy }) => {
             <Typography variant="subtitle2" color="primary" gutterBottom>
               Humanized Text ({result.wordCount.humanized} words)
             </Typography>
-            <Typography 
-              variant="body2" 
+            <Box 
               sx={{ 
-                maxHeight: 300, 
+                maxHeight: 400, 
                 overflow: 'auto',
                 backgroundColor: 'transparent',
                 p: 2,
@@ -273,8 +381,8 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, onCopy }) => {
                 fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
               }}
             >
-              {result.humanized}
-            </Typography>
+              {formatText(result.humanized)}
+            </Box>
           </CardContent>
         </Card>
 

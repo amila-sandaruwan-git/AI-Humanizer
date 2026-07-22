@@ -311,7 +311,7 @@ function App() {
               color: 'text.primary',
             }}
           >
-            📚 Help Categories
+            Help Categories
           </Typography>
 
           <Box sx={{
@@ -499,7 +499,7 @@ function App() {
     <ColorModeContext.Provider value={colorMode}>
       <ThemeProvider theme={appTheme}>
         <CssBaseline />
-        <ToastProvider>
+        <ToastProvider toastOffsetTop={80}>
           <Box
             sx={{
               display: 'flex',
