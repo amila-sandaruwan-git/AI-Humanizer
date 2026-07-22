@@ -1,3 +1,6 @@
+// src/styles/theme.ts
+
+
 import { createTheme } from '@mui/material/styles';
 
 export const theme = (mode: 'light' | 'dark') => createTheme({

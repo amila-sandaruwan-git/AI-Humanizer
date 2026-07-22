@@ -1,45 +1,10 @@
-// src/services/commentService.ts
-
 import { supabase } from './supabaseClient';
-
-export interface Comment {
-  id: string;
-  user_id: string;
-  content: string;
-  parent_id: string | null;
-  likes: number;
-  dislikes: number;
-  created_at: string;
-  updated_at: string;
-  user?: {
-    email: string;
-    user_metadata: {
-      full_name?: string;
-      avatar_url?: string;
-    };
-  };
-  replies?: Comment[];
-  user_vote?: 'like' | 'dislike' | null;
-}
-
-export interface CommentWithUser extends Comment {
-  user: {
-    email: string;
-    user_metadata: {
-      full_name?: string;
-      avatar_url?: string;
-    };
-  };
-  replies?: CommentWithUser[];
-  user_vote?: 'like' | 'dislike' | null;
-}
+import { Comment, CommentUser } from '../types/comment';
 
 export const commentService = {
   // Get all comments with replies
-  async getComments(): Promise<CommentWithUser[]> {
+  async getComments(): Promise<Comment[]> {
     try {
-      console.log('Fetching comments...');
-      
       const { data: comments, error } = await supabase
         .from('comments')
         .select('*')
@@ -51,91 +16,18 @@ export const commentService = {
         return [];
       }
 
-      console.log(`Fetched ${comments?.length || 0} comments`);
-
       if (!comments || comments.length === 0) {
         return [];
       }
 
-      const userIds = [...new Set(comments.map(c => c.user_id))];
-      
-      const { data: profiles, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, email, full_name, avatar_url')
-        .in('id', userIds);
+      const commentsWithReplies = await Promise.all(
+        comments.map(async (comment) => {
+          const replies = await this.getReplies(comment.id);
+          return { ...comment, replies };
+        })
+      );
 
-      const userMap = new Map();
-      
-      if (profiles) {
-        profiles.forEach((profile: any) => {
-          userMap.set(profile.id, {
-            email: profile.email || '',
-            user_metadata: {
-              full_name: profile.full_name || 'User',
-              avatar_url: profile.avatar_url || '',
-            }
-          });
-        });
-      }
-
-      if (profileError || !profiles || profiles.length === 0) {
-        console.log('No profiles found, using auth data fallback');
-        const { data: session } = await supabase.auth.getSession();
-        const currentUser = session?.session?.user;
-        
-        if (currentUser) {
-          comments.forEach((comment: any) => {
-            if (comment.user_id === currentUser.id && !userMap.has(currentUser.id)) {
-              userMap.set(currentUser.id, {
-                email: currentUser.email || '',
-                user_metadata: {
-                  full_name: currentUser.user_metadata?.full_name || 
-                            currentUser.user_metadata?.name || 
-                            'User',
-                  avatar_url: currentUser.user_metadata?.avatar_url || '',
-                }
-              });
-            }
-          });
-        }
-      }
-
-      const { data: session } = await supabase.auth.getSession();
-      const userId = session?.session?.user?.id;
-
-      let voteMap = new Map();
-      if (userId) {
-        const { data: votes } = await supabase
-          .from('comment_votes')
-          .select('comment_id, vote_type')
-          .eq('user_id', userId);
-
-        votes?.forEach(v => voteMap.set(v.comment_id, v.vote_type));
-      }
-
-      const commentsWithUser = comments.map((comment: any) => {
-        const userData = userMap.get(comment.user_id) || {
-          email: '',
-          user_metadata: {
-            full_name: 'User',
-            avatar_url: '',
-          }
-        };
-        
-        return {
-          ...comment,
-          user: userData,
-          user_vote: voteMap.get(comment.id) || null,
-          replies: []
-        };
-      });
-
-      for (const comment of commentsWithUser) {
-        const replies = await this.getReplies(comment.id);
-        comment.replies = replies;
-      }
-
-      return commentsWithUser;
+      return commentsWithReplies;
     } catch (error) {
       console.error('Error in getComments:', error);
       return [];
@@ -143,7 +35,7 @@ export const commentService = {
   },
 
   // Get replies for a specific comment
-  async getReplies(parentId: string): Promise<CommentWithUser[]> {
+  async getReplies(parentId: string): Promise<Comment[]> {
     try {
       const { data: replies, error } = await supabase
         .from('comments')
@@ -156,60 +48,7 @@ export const commentService = {
         return [];
       }
 
-      if (!replies || replies.length === 0) {
-        return [];
-      }
-
-      const userIds = [...new Set(replies.map(r => r.user_id))];
-      
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, email, full_name, avatar_url')
-        .in('id', userIds);
-
-      const userMap = new Map();
-      if (profiles) {
-        profiles.forEach((profile: any) => {
-          userMap.set(profile.id, {
-            email: profile.email || '',
-            user_metadata: {
-              full_name: profile.full_name || 'User',
-              avatar_url: profile.avatar_url || '',
-            }
-          });
-        });
-      }
-
-      const { data: session } = await supabase.auth.getSession();
-      const userId = session?.session?.user?.id;
-
-      let voteMap = new Map();
-      if (userId) {
-        const replyIds = replies.map(r => r.id);
-        const { data: votes } = await supabase
-          .from('comment_votes')
-          .select('comment_id, vote_type')
-          .eq('user_id', userId)
-          .in('comment_id', replyIds);
-
-        votes?.forEach(v => voteMap.set(v.comment_id, v.vote_type));
-      }
-
-      return replies.map((reply: any) => {
-        const userData = userMap.get(reply.user_id) || {
-          email: '',
-          user_metadata: {
-            full_name: 'User',
-            avatar_url: '',
-          }
-        };
-        
-        return {
-          ...reply,
-          user: userData,
-          user_vote: voteMap.get(reply.id) || null,
-        };
-      });
+      return replies || [];
     } catch (error) {
       console.error('Error in getReplies:', error);
       return [];
@@ -217,43 +56,46 @@ export const commentService = {
   },
 
   // Add a new comment
-  async addComment(content: string, parentId: string | null = null): Promise<CommentWithUser> {
+  async addComment(
+    content: string,
+    user: CommentUser,
+    parentId: string | null = null
+  ): Promise<Comment | null> {
     try {
-      console.log('Adding comment...');
-      
-      const { data: session } = await supabase.auth.getSession();
-      const userId = session?.session?.user?.id;
-      
-      if (!userId) {
-        throw new Error('You must be logged in to comment');
-      }
-
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
+      // Check if user already exists
+      const { data: existingUser, error: userError } = await supabase
+        .from('comment_users')
+        .select('email')
+        .eq('email', user.email)
         .maybeSingle();
 
-      if (!existingProfile) {
-        console.log('Creating profile for user...');
-        const userData = session?.session?.user;
-        await supabase
-          .from('profiles')
-          .insert({
-            id: userId,
-            email: userData?.email || '',
-            full_name: userData?.user_metadata?.full_name || 
-                      userData?.user_metadata?.name || 
-                      'User',
-            avatar_url: userData?.user_metadata?.avatar_url || '',
-          });
+      if (userError && userError.code !== 'PGRST116') {
+        console.error('Error checking user:', userError);
       }
 
-      const { data, error } = await supabase
+      if (!existingUser) {
+        const { error: insertUserError } = await supabase
+          .from('comment_users')
+          .insert({
+            email: user.email,
+            name: user.is_anonymous ? 'Anonymous' : user.name,
+            is_anonymous: user.is_anonymous,
+          });
+
+        if (insertUserError) {
+          console.error('Error creating user:', insertUserError);
+          throw insertUserError;
+        }
+      }
+
+      const { data: comment, error } = await supabase
         .from('comments')
         .insert({
           content: content.trim(),
-          user_id: userId,
+          user_id: user.email,
+          user_name: user.is_anonymous ? 'Anonymous' : user.name,
+          user_email: user.email,
+          is_anonymous: user.is_anonymous,
           parent_id: parentId,
         })
         .select('*')
@@ -264,24 +106,7 @@ export const commentService = {
         throw error;
       }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('email, full_name, avatar_url')
-        .eq('id', userId)
-        .maybeSingle();
-
-      return {
-        ...data,
-        user: {
-          email: profile?.email || '',
-          user_metadata: {
-            full_name: profile?.full_name || 'User',
-            avatar_url: profile?.avatar_url || '',
-          }
-        },
-        user_vote: null,
-        replies: []
-      };
+      return comment as Comment;
     } catch (error) {
       console.error('Error in addComment:', error);
       throw error;
@@ -289,8 +114,22 @@ export const commentService = {
   },
 
   // Update a comment
-  async updateComment(commentId: string, content: string): Promise<void> {
+  async updateComment(commentId: string, content: string, userEmail: string): Promise<void> {
     try {
+      const { data: comment, error: fetchError } = await supabase
+        .from('comments')
+        .select('user_id')
+        .eq('id', commentId)
+        .single();
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
+      if (comment.user_id !== userEmail) {
+        throw new Error('You do not have permission to update this comment');
+      }
+
       const { error } = await supabase
         .from('comments')
         .update({ 
@@ -309,9 +148,23 @@ export const commentService = {
     }
   },
 
-  // Delete a comment
-  async deleteComment(commentId: string): Promise<void> {
+  // Delete a comment and its replies
+  async deleteComment(commentId: string, userEmail: string): Promise<void> {
     try {
+      const { data: comment, error: fetchError } = await supabase
+        .from('comments')
+        .select('user_id')
+        .eq('id', commentId)
+        .single();
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
+      if (comment.user_id !== userEmail) {
+        throw new Error('You do not have permission to delete this comment');
+      }
+
       await supabase
         .from('comments')
         .delete()
@@ -332,135 +185,56 @@ export const commentService = {
     }
   },
 
-  // Like or dislike a comment - UPDATED with better vote removal
-  async voteComment(commentId: string, voteType: 'like' | 'dislike' | null): Promise<void> {
+  // Get user by email
+  async getUserByEmail(email: string): Promise<CommentUser | null> {
     try {
-      console.log(`Voting on comment ${commentId}: ${voteType}`);
-      
-      const { data: session } = await supabase.auth.getSession();
-      const userId = session?.session?.user?.id;
-
-      if (!userId) {
-        throw new Error('You must be logged in to vote');
-      }
-
-      // Check if user already voted
-      const { data: existingVote, error: fetchError } = await supabase
-        .from('comment_votes')
+      const { data: user, error } = await supabase
+        .from('comment_users')
         .select('*')
-        .eq('comment_id', commentId)
-        .eq('user_id', userId)
+        .eq('email', email)
         .maybeSingle();
 
-      if (fetchError) {
-        console.error('Error fetching existing vote:', fetchError);
+      if (error) {
+        console.error('Error fetching user:', error);
+        return null;
       }
 
-      if (existingVote) {
-        if (voteType === null) {
-          // ✅ REMOVE VOTE - Delete from database
-          console.log(`Removing vote from comment ${commentId}`);
-          const { error: deleteError } = await supabase
-            .from('comment_votes')
-            .delete()
-            .eq('comment_id', commentId)
-            .eq('user_id', userId);
-            
-          if (deleteError) {
-            console.error('Error deleting vote:', deleteError);
-            throw deleteError;
-          }
-          console.log(`✅ Vote removed from comment ${commentId}`);
-        } else if (existingVote.vote_type !== voteType) {
-          // Update vote from like to dislike or vice versa
-          console.log(`Updating vote on comment ${commentId} from ${existingVote.vote_type} to ${voteType}`);
-          const { error: updateError } = await supabase
-            .from('comment_votes')
-            .update({ vote_type: voteType })
-            .eq('comment_id', commentId)
-            .eq('user_id', userId);
-            
-          if (updateError) {
-            console.error('Error updating vote:', updateError);
-            throw updateError;
-          }
-          console.log(`✅ Vote updated on comment ${commentId} to ${voteType}`);
-        } else {
-          console.log(`Vote already ${voteType} on comment ${commentId}`);
-        }
-      } else if (voteType !== null) {
-        // Insert new vote
-        console.log(`Adding new ${voteType} to comment ${commentId}`);
-        const { error: insertError } = await supabase
-          .from('comment_votes')
-          .insert({
-            comment_id: commentId,
-            user_id: userId,
-            vote_type: voteType,
-          });
-          
-        if (insertError) {
-          console.error('Error inserting vote:', insertError);
-          throw insertError;
-        }
-        console.log(`✅ New ${voteType} added to comment ${commentId}`);
+      return user || null;
+    } catch (error) {
+      console.error('Error in getUserByEmail:', error);
+      return null;
+    }
+  },
+
+  // Update user profile
+  async updateUserProfile(email: string, name: string, isAnonymous: boolean): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('comment_users')
+        .update({
+          name: isAnonymous ? 'Anonymous' : name,
+          is_anonymous: isAnonymous,
+        })
+        .eq('email', email);
+
+      if (error) {
+        console.error('Error updating user profile:', error);
+        throw error;
       }
     } catch (error) {
-      console.error('Error in voteComment:', error);
+      console.error('Error in updateUserProfile:', error);
       throw error;
     }
   },
 
-  // Get vote count for a specific comment
-  async getVoteCount(commentId: string): Promise<{ likes: number; dislikes: number }> {
+  // Check if user exists
+  async userExists(email: string): Promise<boolean> {
     try {
-      const { data: comment, error } = await supabase
-        .from('comments')
-        .select('likes, dislikes')
-        .eq('id', commentId)
-        .single();
-
-      if (error) {
-        console.error('Error fetching vote count:', error);
-        return { likes: 0, dislikes: 0 };
-      }
-
-      return {
-        likes: comment?.likes || 0,
-        dislikes: comment?.dislikes || 0,
-      };
+      const user = await this.getUserByEmail(email);
+      return !!user;
     } catch (error) {
-      console.error('Error in getVoteCount:', error);
-      return { likes: 0, dislikes: 0 };
-    }
-  },
-
-  // Get user's vote on a comment
-  async getUserVote(commentId: string): Promise<'like' | 'dislike' | null> {
-    try {
-      const { data: session } = await supabase.auth.getSession();
-      const userId = session?.session?.user?.id;
-
-      if (!userId) {
-        return null;
-      }
-
-      const { data: vote, error } = await supabase
-        .from('comment_votes')
-        .select('vote_type')
-        .eq('comment_id', commentId)
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error fetching user vote:', error);
-        return null;
-      }
-
-      return vote?.vote_type || null;
-    } catch (error) {
-      console.error('Error in getUserVote:', error);
-      return null;
+      console.error('Error in userExists:', error);
+      return false;
     }
   }
 };

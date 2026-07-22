@@ -1,3 +1,5 @@
+// src/components/FileUpload.tsx
+
 import React, { useRef, useState } from 'react';
 import {
   Box,

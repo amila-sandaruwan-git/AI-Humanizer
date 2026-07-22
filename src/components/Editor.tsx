@@ -1,6 +1,3 @@
-// src/components/Editor.tsx
-
-
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -20,7 +17,6 @@ import {
   Tooltip,
   Collapse,
   Divider,
-  Chip,
   alpha,
   useTheme,
 } from '@mui/material';
@@ -31,12 +27,6 @@ import {
   UploadFile,
   Close,
   AutoAwesome,
-  Speed,
-  Style as StyleIcon,
-  Tune,
-  Description,
-  CheckCircle,
-  Gradient,
 } from '@mui/icons-material';
 import { humanizeText } from '../services/aiService';
 import { HumanizeResponse, ToneType, StyleType, IntensityType } from '../types';
@@ -47,15 +37,9 @@ import { useUndo } from '../hooks/useUndo';
 
 interface EditorProps {
   onHumanize: (result: HumanizeResponse) => void;
-  isAuthenticated?: boolean;
-  onAuthRequired?: () => void;
 }
 
-const Editor: React.FC<EditorProps> = ({ 
-  onHumanize, 
-  isAuthenticated = false,
-  onAuthRequired 
-}) => {
+const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const [tone, setTone] = useState<ToneType>('professional');
@@ -87,10 +71,6 @@ const Editor: React.FC<EditorProps> = ({
       if (isCtrl && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
         e.stopPropagation();
-        if (!isAuthenticated && onAuthRequired) {
-          onAuthRequired();
-          return;
-        }
         const previousText = undo();
         if (previousText !== undefined) {
           showInfo('Undo ✅');
@@ -101,10 +81,6 @@ const Editor: React.FC<EditorProps> = ({
       if (isCtrl && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
         e.preventDefault();
         e.stopPropagation();
-        if (!isAuthenticated && onAuthRequired) {
-          onAuthRequired();
-          return;
-        }
         const nextText = redo();
         if (nextText !== undefined) {
           showInfo('Redo 🔄');
@@ -115,13 +91,9 @@ const Editor: React.FC<EditorProps> = ({
 
     document.addEventListener('keydown', handleKeyDown, true);
     return () => document.removeEventListener('keydown', handleKeyDown, true);
-  }, [undo, redo, showInfo, isAuthenticated, onAuthRequired]);
+  }, [undo, redo, showInfo]);
 
   const handleUndo = () => {
-    if (!isAuthenticated && onAuthRequired) {
-      onAuthRequired();
-      return;
-    }
     const previousText = undo();
     if (previousText !== undefined) {
       showInfo('Undo ✅');
@@ -130,10 +102,6 @@ const Editor: React.FC<EditorProps> = ({
   };
 
   const handleRedo = () => {
-    if (!isAuthenticated && onAuthRequired) {
-      onAuthRequired();
-      return;
-    }
     const nextText = redo();
     if (nextText !== undefined) {
       showInfo('Redo 🔄');
@@ -142,19 +110,11 @@ const Editor: React.FC<EditorProps> = ({
   };
 
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!isAuthenticated && onAuthRequired) {
-      onAuthRequired();
-      return;
-    }
     const newText = e.target.value;
     setText(newText);
   };
 
   const handleFileContent = (content: string, name: string) => {
-    if (!isAuthenticated && onAuthRequired) {
-      onAuthRequired();
-      return;
-    }
     const separator = text ? '\n\n' : '';
     const newText = text + separator + content;
     setTextImmediate(newText);
@@ -164,18 +124,10 @@ const Editor: React.FC<EditorProps> = ({
   };
 
   const handleFileUploadClick = () => {
-    if (!isAuthenticated && onAuthRequired) {
-      onAuthRequired();
-      return;
-    }
     setShowFileUpload(!showFileUpload);
   };
 
   const handleRemoveFileContent = () => {
-    if (!isAuthenticated && onAuthRequired) {
-      onAuthRequired();
-      return;
-    }
     const lines = text.split('\n');
     let fileContentStart = -1;
     let fileContentEnd = -1;
@@ -201,11 +153,6 @@ const Editor: React.FC<EditorProps> = ({
   };
 
   const handleHumanize = async () => {
-    if (!isAuthenticated && onAuthRequired) {
-      onAuthRequired();
-      return;
-    }
-
     if (!text.trim()) {
       setError('Please enter some text to humanize');
       showError('Please enter some text to humanize');
@@ -242,10 +189,6 @@ const Editor: React.FC<EditorProps> = ({
   };
 
   const handleClear = () => {
-    if (!isAuthenticated && onAuthRequired) {
-      onAuthRequired();
-      return;
-    }
     setTextImmediate('');
     clearHistory();
     setResult(null);
@@ -255,10 +198,6 @@ const Editor: React.FC<EditorProps> = ({
   };
 
   const handleCopy = async () => {
-    if (!isAuthenticated && onAuthRequired) {
-      onAuthRequired();
-      return;
-    }
     if (result) {
       try {
         await navigator.clipboard.writeText(result.humanized);
@@ -270,40 +209,18 @@ const Editor: React.FC<EditorProps> = ({
   };
 
   const handleToneChange = (value: ToneType) => {
-    if (!isAuthenticated && onAuthRequired) {
-      onAuthRequired();
-      return;
-    }
     setTone(value);
     showInfo(`Tone changed to: ${value.charAt(0).toUpperCase() + value.slice(1)}`);
   };
 
   const handleIntensityChange = (value: IntensityType) => {
-    if (!isAuthenticated && onAuthRequired) {
-      onAuthRequired();
-      return;
-    }
     setIntensity(value);
     showInfo(`Intensity changed to: ${value.charAt(0).toUpperCase() + value.slice(1)}`);
   };
 
   const handleStyleChange = (value: StyleType) => {
-    if (!isAuthenticated && onAuthRequired) {
-      onAuthRequired();
-      return;
-    }
     setStyle(value);
     showInfo(`Style changed to: ${value.charAt(0).toUpperCase() + value.slice(1)}`);
-  };
-
-  // Get intensity color
-  const getIntensityColor = (level: IntensityType) => {
-    switch (level) {
-      case 'light': return isDark ? '#4CAF50' : '#43A047';
-      case 'medium': return isDark ? '#FF9800' : '#F57C00';
-      case 'heavy': return isDark ? '#EF5350' : '#D32F2F';
-      default: return 'primary.main';
-    }
   };
 
   return (
@@ -338,38 +255,35 @@ const Editor: React.FC<EditorProps> = ({
           flexWrap: 'wrap',
           gap: 2,
         }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            
-            <Box>
-              <Typography 
-                variant="h4" 
-                sx={{ 
-                  fontWeight: 800,
-                  fontSize: { xs: '1.5rem', sm: '2rem', md: '2.25rem' },
-                  fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
-                  letterSpacing: '-0.03em',
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                }}
-              >
-                AI Text Humanizer
-              </Typography>
-              <Typography 
-                variant="body1" 
-                sx={{ 
-                  color: 'text.secondary',
-                  fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
-                  fontSize: '0.9375rem',
-                  fontWeight: 400,
-                  letterSpacing: '-0.01em',
-                  mt: 0.25,
-                }}
-              >
-                Transform AI-generated content into natural, human-like writing
-              </Typography>
-            </Box>
+          <Box>
+            <Typography 
+              variant="h4" 
+              sx={{ 
+                fontWeight: 800,
+                fontSize: { xs: '1.5rem', sm: '2rem', md: '2.25rem' },
+                fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
+                letterSpacing: '-0.03em',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}
+            >
+              AI Text Humanizer
+            </Typography>
+            <Typography 
+              variant="body1" 
+              sx={{ 
+                color: 'text.secondary',
+                fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
+                fontSize: '0.9375rem',
+                fontWeight: 400,
+                letterSpacing: '-0.01em',
+                mt: 0.25,
+              }}
+            >
+              Transform AI-generated content into natural, human-like writing
+            </Typography>
           </Box>
 
           {/* Action Buttons */}
@@ -528,7 +442,7 @@ const Editor: React.FC<EditorProps> = ({
           }}
         />
 
-        {/* Status Bar - Clean, No Background or Border */}
+        {/* Status Bar */}
         <Box sx={{ 
           display: 'flex', 
           justifyContent: 'space-between', 
@@ -546,24 +460,6 @@ const Editor: React.FC<EditorProps> = ({
             }}>
               {text ? `${text.split(/\s+/).filter(w => w).length} words • ${text.length} characters` : 'No text entered'}
             </Typography>
-            {fileName && (
-              <Chip 
-                label={fileName} 
-                size="small" 
-                variant="outlined"
-                sx={{ height: 20, fontSize: '0.6rem' }}
-              />
-            )}
-          </Box>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-            {canUndo || canRedo ? (
-              <Typography variant="caption" color="text.secondary" sx={{ 
-                fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
-                fontSize: '0.65rem',
-              }}>
-                
-              </Typography>
-            ) : null}
           </Box>
         </Box>
 
@@ -681,7 +577,6 @@ const Editor: React.FC<EditorProps> = ({
             }}>
               Rewriting Intensity
             </Typography>
-            
           </Box>
           <Slider
             value={intensity === 'light' ? 1 : intensity === 'medium' ? 2 : 3}
@@ -791,8 +686,6 @@ const Editor: React.FC<EditorProps> = ({
           >
             Clear
           </Button>
-          
-          
         </Box>
 
         {/* Error Message */}
