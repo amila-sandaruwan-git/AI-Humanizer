@@ -149,7 +149,7 @@ function App() {
           }}
         >
           <Typography variant="body2" sx={{ fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif' }}>
-            ✅ No login required • 100% free • Works offline • Your data stays private
+            No login required • 100% free • Works offline • Your data stays private
           </Typography>
         </Alert>
       </Box>
