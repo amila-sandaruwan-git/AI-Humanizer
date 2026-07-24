@@ -957,66 +957,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
             mt: 0.25,
             px: 0.5,
           }}>
-            <Typography variant="caption" sx={{ 
-              color: sliderValue === 1 ? '#90CAF9' : isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)',
-              fontWeight: sliderValue === 1 ? 500 : 400,
-              transition: 'all 0.3s ease',
-              fontSize: '0.55rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.5,
-              letterSpacing: '0.02em',
-            }}>
-              <span style={{ 
-                display: 'inline-block', 
-                width: 4, 
-                height: 4, 
-                borderRadius: '50%', 
-                backgroundColor: '#90CAF9',
-                opacity: sliderValue === 1 ? 0.8 : 0.2,
-              }} />
-              Gentle
-            </Typography>
-            <Typography variant="caption" sx={{ 
-              color: sliderValue === 2 ? '#64B5F6' : isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)',
-              fontWeight: sliderValue === 2 ? 500 : 400,
-              transition: 'all 0.3s ease',
-              fontSize: '0.55rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.5,
-              letterSpacing: '0.02em',
-            }}>
-              <span style={{ 
-                display: 'inline-block', 
-                width: 4, 
-                height: 4, 
-                borderRadius: '50%', 
-                backgroundColor: '#64B5F6',
-                opacity: sliderValue === 2 ? 0.8 : 0.2,
-              }} />
-              Moderate
-            </Typography>
-            <Typography variant="caption" sx={{ 
-              color: sliderValue === 3 ? '#42A5F5' : isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)',
-              fontWeight: sliderValue === 3 ? 500 : 400,
-              transition: 'all 0.3s ease',
-              fontSize: '0.55rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.5,
-              letterSpacing: '0.02em',
-            }}>
-              <span style={{ 
-                display: 'inline-block', 
-                width: 4, 
-                height: 4, 
-                borderRadius: '50%', 
-                backgroundColor: '#42A5F5',
-                opacity: sliderValue === 3 ? 0.8 : 0.2,
-              }} />
-              Aggressive
-            </Typography>
+            
           </Box>
         </Box>
 
