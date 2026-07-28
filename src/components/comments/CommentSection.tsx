@@ -564,18 +564,47 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
     checkUser();
   }, [userEmail]);
 
+  // ============ FIXED: Handle User Submit (Create or Update) ============
   const handleUserSubmit = async (user: { email: string; name: string; is_anonymous: boolean }) => {
-    setUserEmail(user.email);
-    setUserName(user.name);
-    setIsAnonymous(user.is_anonymous);
-    localStorage.setItem('commentUserEmail', user.email);
-    localStorage.setItem('commentUserName', user.name);
-    localStorage.setItem('commentIsAnonymous', String(user.is_anonymous));
-    setExistingUser({
-      email: user.email,
-      name: user.name,
-      is_anonymous: user.is_anonymous,
-    });
+    // Check if this is an update (user already exists)
+    const isUpdate = existingUser && existingUser.email === user.email;
+    
+    if (isUpdate) {
+      // Update existing user in database
+      try {
+        await commentService.updateUserProfile(user.email, user.name, user.is_anonymous);
+        // Update local state
+        setExistingUser({
+          email: user.email,
+          name: user.name,
+          is_anonymous: user.is_anonymous,
+        });
+        setUserEmail(user.email);
+        setUserName(user.name);
+        setIsAnonymous(user.is_anonymous);
+        localStorage.setItem('commentUserEmail', user.email);
+        localStorage.setItem('commentUserName', user.name);
+        localStorage.setItem('commentIsAnonymous', String(user.is_anonymous));
+        showSuccess('Profile updated successfully!');
+      } catch (error) {
+        console.error('Error updating profile:', error);
+        showError('Failed to update profile');
+        return;
+      }
+    } else {
+      // New user - save to localStorage and state
+      setUserEmail(user.email);
+      setUserName(user.name);
+      setIsAnonymous(user.is_anonymous);
+      localStorage.setItem('commentUserEmail', user.email);
+      localStorage.setItem('commentUserName', user.name);
+      localStorage.setItem('commentIsAnonymous', String(user.is_anonymous));
+      setExistingUser({
+        email: user.email,
+        name: user.name,
+        is_anonymous: user.is_anonymous,
+      });
+    }
 
     setDialogOpen(false);
 
@@ -583,6 +612,29 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
       await handleAddComment();
     }
     setPendingAction(null);
+  };
+
+  // ============ FIXED: Handle Update User ============
+  const handleUpdateUser = async (user: { email: string; name: string; is_anonymous: boolean }) => {
+    try {
+      await commentService.updateUserProfile(user.email, user.name, user.is_anonymous);
+      setExistingUser({
+        email: user.email,
+        name: user.name,
+        is_anonymous: user.is_anonymous,
+      });
+      setUserEmail(user.email);
+      setUserName(user.name);
+      setIsAnonymous(user.is_anonymous);
+      localStorage.setItem('commentUserEmail', user.email);
+      localStorage.setItem('commentUserName', user.name);
+      localStorage.setItem('commentIsAnonymous', String(user.is_anonymous));
+      showSuccess('Profile updated successfully!');
+      setDialogOpen(false);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      showError('Failed to update profile');
+    }
   };
 
   const handleAddComment = async () => {
@@ -646,7 +698,6 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
     }
   };
 
-  // FIXED: Edit comment with proper state update and error handling
   const handleEditComment = async (commentId: string, content: string) => {
     if (!userEmail) {
       showError('You must be logged in to edit');
@@ -657,7 +708,6 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
       await commentService.updateComment(commentId, content, userEmail);
       console.log(`✅ Comment ${commentId} edited successfully`);
       
-      // Update local state
       setComments(prev => 
         prev.map(c => {
           if (c.id === commentId) {
@@ -682,7 +732,6 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
     }
   };
 
-  // FIXED: Delete comment with proper state update and error handling
   const handleDeleteComment = async (commentId: string) => {
     if (!window.confirm('Delete this comment?')) return;
     if (!userEmail) {
@@ -694,7 +743,6 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
       await commentService.deleteComment(commentId, userEmail);
       console.log(`✅ Comment ${commentId} deleted successfully`);
       
-      // Update local state - remove the comment and its replies
       setComments(prev => 
         prev
           .filter(c => c.id !== commentId)
@@ -884,7 +932,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
         )}
       </Box>
 
-      {/* User Dialog */}
+      {/* User Dialog - Updated with onUpdate prop */}
       <CommentDialog
         open={dialogOpen}
         onClose={() => {
@@ -892,8 +940,10 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
           setPendingAction(null);
         }}
         onSubmit={handleUserSubmit}
+        onUpdate={handleUpdateUser}
         title={dialogMode === 'edit' ? 'Edit Your Profile' : 'Join the Conversation'}
         submitLabel={dialogMode === 'edit' ? 'Update' : 'Continue'}
+        updateLabel="Save Changes"
         existingUser={dialogMode === 'edit' ? existingUser : null}
         isEditing={dialogMode === 'edit'}
       />

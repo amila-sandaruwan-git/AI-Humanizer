@@ -1,5 +1,3 @@
-// src/components/CommentDialog.tsx
-
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -15,16 +13,19 @@ import {
   Alert,
   CircularProgress,
   IconButton,
+  Stack,
 } from '@mui/material';
-import { Close, Edit } from '@mui/icons-material';
+import { Close, Edit, Save, Cancel } from '@mui/icons-material';
 import { CommentUser } from '../types/comment';
 
 interface CommentDialogProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (user: CommentUser) => void;
+  onUpdate?: (user: CommentUser) => Promise<void>;
   title?: string;
   submitLabel?: string;
+  updateLabel?: string;
   initialName?: string;
   initialEmail?: string;
   initialAnonymous?: boolean;
@@ -36,8 +37,10 @@ const CommentDialog: React.FC<CommentDialogProps> = ({
   open,
   onClose,
   onSubmit,
+  onUpdate,
   title = 'Add Your Details',
   submitLabel = 'Continue',
+  updateLabel = 'Save Changes',
   initialName = '',
   initialEmail = '',
   initialAnonymous = false,
@@ -56,8 +59,12 @@ const CommentDialog: React.FC<CommentDialogProps> = ({
       setName(existingUser.name);
       setEmail(existingUser.email);
       setIsAnonymous(existingUser.is_anonymous);
+    } else {
+      setName(initialName);
+      setEmail(initialEmail);
+      setIsAnonymous(initialAnonymous);
     }
-  }, [existingUser]);
+  }, [existingUser, initialName, initialEmail, initialAnonymous]);
 
   const validate = (): boolean => {
     const newErrors: { name?: string; email?: string } = {};
@@ -82,13 +89,40 @@ const CommentDialog: React.FC<CommentDialogProps> = ({
     setLoading(true);
     onSubmit({
       email: email.trim(),
-      name: isAnonymous ? 'Anonymous' : name.trim(),
+      name: isAnonymous ? 'Anonymous' : name.trim() || 'User',
       is_anonymous: isAnonymous,
     });
     setLoading(false);
     setTimeout(() => {
       onClose();
     }, 300);
+  };
+
+  const handleUpdate = async () => {
+    if (!validate()) return;
+
+    setLoading(true);
+    try {
+      if (onUpdate) {
+        await onUpdate({
+          email: email.trim(),
+          name: isAnonymous ? 'Anonymous' : name.trim() || 'User',
+          is_anonymous: isAnonymous,
+        });
+      } else {
+        // Fallback: use onSubmit if onUpdate is not provided
+        onSubmit({
+          email: email.trim(),
+          name: isAnonymous ? 'Anonymous' : name.trim() || 'User',
+          is_anonymous: isAnonymous,
+        });
+      }
+      setLoading(false);
+      onClose();
+    } catch (error) {
+      console.error('Update error:', error);
+      setLoading(false);
+    }
   };
 
   const handleChangeUser = () => {
@@ -108,6 +142,8 @@ const CommentDialog: React.FC<CommentDialogProps> = ({
     }
   };
 
+  const isInUpdateMode = isEditing || showChangeOption;
+
   return (
     <Dialog 
       open={open} 
@@ -122,7 +158,7 @@ const CommentDialog: React.FC<CommentDialogProps> = ({
       }}
     >
       <DialogTitle sx={{ fontWeight: 700, fontSize: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        {title}
+        {isInUpdateMode ? 'Update Profile' : title}
         <IconButton onClick={onClose} size="small">
           <Close />
         </IconButton>
@@ -151,7 +187,9 @@ const CommentDialog: React.FC<CommentDialogProps> = ({
         ) : (
           <>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              {isEditing ? 'Update your details below.' : 'Please provide your details to continue. Your email will be used to identify you and prevent duplicate voting. Your email is never shared publicly.'}
+              {isInUpdateMode 
+                ? 'Update your profile details below.' 
+                : 'Please provide your details to continue. Your email will be used to identify you and prevent duplicate voting. Your email is never shared publicly.'}
             </Typography>
 
             <TextField
@@ -162,7 +200,7 @@ const CommentDialog: React.FC<CommentDialogProps> = ({
               onChange={(e) => setEmail(e.target.value)}
               error={!!errors.email}
               helperText={errors.email}
-              disabled={loading || (!!existingUser && !isEditing)}
+              disabled={loading || (!!existingUser && !isInUpdateMode)}
               placeholder="you@example.com"
               sx={{ mb: 2 }}
             />
@@ -211,7 +249,6 @@ const CommentDialog: React.FC<CommentDialogProps> = ({
                   ? ' You will appear as "Anonymous" to other users.'
                   : ' Your name will be shown with your comments.'}
                 <br />
-                
               </Typography>
             </Alert>
 
@@ -226,24 +263,89 @@ const CommentDialog: React.FC<CommentDialogProps> = ({
         )}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3 }}>
-        <Button onClick={onClose} disabled={loading}>
-          {existingUser && !showChangeOption ? 'Close' : 'Cancel'}
-        </Button>
-        {(!existingUser || showChangeOption || isEditing) && (
-          <Button
-            onClick={handleSubmit}
-            variant="contained"
-            disabled={loading}
-            startIcon={loading ? <CircularProgress size={20} /> : null}
-            sx={{
-              borderRadius: 2,
-              textTransform: 'none',
-              fontWeight: 600,
-              px: 3,
-            }}
-          >
-            {isEditing ? 'Update' : submitLabel}
+        {existingUser && !showChangeOption && !isEditing ? (
+          <Button onClick={onClose} disabled={loading}>
+            Close
           </Button>
+        ) : isInUpdateMode ? (
+          <Stack direction="row" spacing={1.5} sx={{ width: '100%', justifyContent: 'flex-end' }}>
+            <Button 
+              onClick={onClose} 
+              disabled={loading}
+              startIcon={<Cancel />}
+              sx={{
+                borderRadius: 2,
+                textTransform: 'none',
+                fontWeight: 500,
+                px: 3,
+                py: 1,
+                border: '1px solid',
+                borderColor: 'divider',
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpdate}
+              variant="contained"
+              disabled={loading}
+              startIcon={loading ? <CircularProgress size={20} /> : <Save />}
+              sx={{
+                borderRadius: 2,
+                textTransform: 'none',
+                fontWeight: 600,
+                px: 4,
+                py: 1,
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: '#fff',
+                boxShadow: '0 4px 24px rgba(102, 126, 234, 0.35)',
+                '&:hover': {
+                  boxShadow: '0 6px 32px rgba(102, 126, 234, 0.5)',
+                  transform: 'translateY(-1px)',
+                },
+              }}
+            >
+              {loading ? 'Saving...' : updateLabel}
+            </Button>
+          </Stack>
+        ) : (
+          <Stack direction="row" spacing={1.5} sx={{ width: '100%', justifyContent: 'flex-end' }}>
+            <Button 
+              onClick={onClose} 
+              disabled={loading}
+              sx={{
+                borderRadius: 2,
+                textTransform: 'none',
+                fontWeight: 500,
+                px: 3,
+                py: 1,
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              variant="contained"
+              disabled={loading}
+              endIcon={loading ? <CircularProgress size={20} /> : null}
+              sx={{
+                borderRadius: 2,
+                textTransform: 'none',
+                fontWeight: 600,
+                px: 4,
+                py: 1,
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: '#fff',
+                boxShadow: '0 4px 24px rgba(102, 126, 234, 0.35)',
+                '&:hover': {
+                  boxShadow: '0 6px 32px rgba(102, 126, 234, 0.5)',
+                  transform: 'translateY(-1px)',
+                },
+              }}
+            >
+              {loading ? 'Processing...' : submitLabel}
+            </Button>
+          </Stack>
         )}
       </DialogActions>
     </Dialog>

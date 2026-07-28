@@ -1,4 +1,6 @@
 import React, { createContext, useMemo, useState, useRef } from 'react';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { ThemeProvider } from '@mui/material/styles';
 import {
   CssBaseline,
@@ -564,7 +566,9 @@ function App() {
           </Box>
         </ToastProvider>
       </ThemeProvider>
+      <Analytics/>
     </ColorModeContext.Provider>
+    
   );
 }
 
