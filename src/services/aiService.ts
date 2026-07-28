@@ -87,7 +87,6 @@ const checkGrammarWithLanguageTool = async (text: string, language: string = 'en
 const applyGrammarAPICorrections = (text: string, matches: GrammarMatch[]): string => {
   let result = text;
   
-  // Sort matches by offset in reverse order to avoid shifting issues
   const sortedMatches = [...matches].sort((a, b) => b.offset - a.offset);
   
   for (const match of sortedMatches) {
@@ -104,7 +103,7 @@ const applyGrammarAPICorrections = (text: string, matches: GrammarMatch[]): stri
 
 // ============ NATURAL LANGUAGE TRANSFORMATIONS ============
 
-// 1. Remove AI Transition Words (furthermore, moreover, consequently, etc.)
+// 1. Remove AI Transition Words
 const removeAITransitions = (text: string): string => {
   const aiTransitions = [
     'furthermore', 'moreover', 'additionally', 'consequently', 
@@ -125,58 +124,22 @@ const removeAITransitions = (text: string): string => {
 // 2. Replace Overly Complex Verbs with Simple Ones
 const simplifyVerbs = (text: string): string => {
   const complexToSimple: { [key: string]: string } = {
-    'utilize': 'use',
-    'utilizes': 'uses',
-    'utilized': 'used',
-    'utilizing': 'using',
-    'demonstrate': 'show',
-    'demonstrates': 'shows',
-    'demonstrated': 'showed',
-    'demonstrating': 'showing',
-    'facilitate': 'help',
-    'facilitates': 'helps',
-    'facilitated': 'helped',
-    'facilitating': 'helping',
-    'implement': 'use',
-    'implemented': 'used',
-    'implementing': 'using',
-    'commence': 'start',
-    'commenced': 'started',
-    'commencing': 'starting',
-    'terminate': 'end',
-    'terminated': 'ended',
-    'terminating': 'ending',
-    'obtain': 'get',
-    'obtained': 'got',
-    'obtaining': 'getting',
-    'procure': 'get',
-    'procured': 'got',
-    'procuring': 'getting',
-    'acquire': 'get',
-    'acquired': 'got',
-    'acquiring': 'getting',
-    'endeavor': 'try',
-    'endeavored': 'tried',
-    'endeavoring': 'trying',
-    'ascertain': 'find out',
-    'ascertained': 'found out',
-    'ascertaining': 'finding out',
-    'expedite': 'speed up',
-    'expedited': 'sped up',
-    'expediting': 'speeding up',
-    'augment': 'add to',
-    'augmented': 'added to',
-    'augmenting': 'adding to',
-    'diminish': 'lessen',
-    'diminished': 'lessened',
-    'diminishing': 'lessening',
-    'elucidate': 'explain',
-    'elucidated': 'explained',
-    'elucidating': 'explaining',
-    'utilization': 'use',
-    'implementation': 'use',
-    'facilitation': 'help',
-    'demonstration': 'show'
+    'utilize': 'use', 'utilizes': 'uses', 'utilized': 'used', 'utilizing': 'using',
+    'demonstrate': 'show', 'demonstrates': 'shows', 'demonstrated': 'showed', 'demonstrating': 'showing',
+    'facilitate': 'help', 'facilitates': 'helps', 'facilitated': 'helped', 'facilitating': 'helping',
+    'implement': 'use', 'implemented': 'used', 'implementing': 'using',
+    'commence': 'start', 'commenced': 'started', 'commencing': 'starting',
+    'terminate': 'end', 'terminated': 'ended', 'terminating': 'ending',
+    'obtain': 'get', 'obtained': 'got', 'obtaining': 'getting',
+    'procure': 'get', 'procured': 'got', 'procuring': 'getting',
+    'acquire': 'get', 'acquired': 'got', 'acquiring': 'getting',
+    'endeavor': 'try', 'endeavored': 'tried', 'endeavoring': 'trying',
+    'ascertain': 'find out', 'ascertained': 'found out', 'ascertaining': 'finding out',
+    'expedite': 'speed up', 'expedited': 'sped up', 'expediting': 'speeding up',
+    'augment': 'add to', 'augmented': 'added to', 'augmenting': 'adding to',
+    'diminish': 'lessen', 'diminished': 'lessened', 'diminishing': 'lessening',
+    'elucidate': 'explain', 'elucidated': 'explained', 'elucidating': 'explaining',
+    'utilization': 'use', 'implementation': 'use', 'facilitation': 'help', 'demonstration': 'show'
   };
   
   let result = text;
@@ -217,73 +180,44 @@ const cutFiller = (text: string): string => {
     result = result.replace(pattern.regex, pattern.replacement);
   }
   
-  // Remove redundant phrases
   result = result.replace(/\b(really|very|quite|rather|pretty)\s+(really|very|quite|rather|pretty)\b/gi, '$1');
-  
   return result;
 };
 
-// 4. Mix Sentence Lengths
+// 4. Mix Sentence Lengths - MODIFIED to preserve paragraph structure
 const mixSentenceLengths = (text: string): string => {
-  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  // Only apply within a single paragraph (no paragraph breaks)
+  // Skip if text has structural markers
+  if (/^#{1,6}\s/.test(text) || /^[•·▪◦●■□*\-+]/.test(text)) {
+    return text;
+  }
   
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
   if (sentences.length <= 1) return text;
   
   let result = [];
   let currentIndex = 0;
   
   while (currentIndex < sentences.length) {
-    // Randomly combine or split
     if (Math.random() < 0.2 && currentIndex < sentences.length - 1) {
-      // Combine two sentences (short + long or long + short)
       const combined = sentences[currentIndex].trim() + ' ' + sentences[currentIndex + 1].trim().toLowerCase();
-      // Remove duplicate words at the boundary
-      const words1 = sentences[currentIndex].trim().split(' ');
-      const words2 = sentences[currentIndex + 1].trim().split(' ');
-      if (words1.length > 1 && words2.length > 1) {
-        if (words1[words1.length - 1].toLowerCase() === words2[0].toLowerCase()) {
-          result.push(words1.join(' ') + ' ' + words2.slice(1).join(' '));
-        } else {
-          result.push(combined);
-        }
-      } else {
-        result.push(combined);
-      }
+      result.push(combined);
       currentIndex += 2;
     } else if (Math.random() < 0.3 && sentences[currentIndex].split(' ').length > 15) {
-      // Split long sentence
-      const longSentence = sentences[currentIndex];
-      const commaSplit = longSentence.split(/,\s+/);
-      if (commaSplit.length > 2) {
-        // Split at comma
-        const mid = Math.floor(commaSplit.length / 2);
-        const firstPart = commaSplit.slice(0, mid).join(', ');
-        const secondPart = commaSplit.slice(mid).join(', ');
-        result.push(firstPart + '.');
-        result.push(secondPart.charAt(0).toUpperCase() + secondPart.slice(1));
-        currentIndex++;
-      } else {
-        const words = longSentence.split(' ');
-        if (words.length > 20) {
-          const mid = Math.floor(words.length / 2);
-          // Find a good split point (at a conjunction or comma)
-          let splitPoint = mid;
-          for (let i = mid; i < Math.min(mid + 5, words.length - 2); i++) {
-            if (['and', 'but', 'or', 'so', 'because', 'although'].includes(words[i].toLowerCase())) {
-              splitPoint = i;
-              break;
-            }
-          }
-          const firstPart = words.slice(0, splitPoint).join(' ');
-          const secondPart = words.slice(splitPoint + 1).join(' ');
-          result.push(firstPart + '.');
-          result.push(secondPart.charAt(0).toUpperCase() + secondPart.slice(1));
-          currentIndex++;
-        } else {
-          result.push(sentences[currentIndex]);
-          currentIndex++;
+      const words = sentences[currentIndex].split(' ');
+      const mid = Math.floor(words.length / 2);
+      let splitPoint = mid;
+      for (let i = mid; i < Math.min(mid + 5, words.length - 2); i++) {
+        if (['and', 'but', 'or', 'so', 'because', 'although'].includes(words[i].toLowerCase())) {
+          splitPoint = i;
+          break;
         }
       }
+      const firstPart = words.slice(0, splitPoint).join(' ');
+      const secondPart = words.slice(splitPoint + 1).join(' ');
+      result.push(firstPart + '.');
+      result.push(secondPart.charAt(0).toUpperCase() + secondPart.slice(1));
+      currentIndex++;
     } else {
       result.push(sentences[currentIndex]);
       currentIndex++;
@@ -293,10 +227,14 @@ const mixSentenceLengths = (text: string): string => {
   return result.join(' ');
 };
 
-// 5. Vary Sentence Starters
+// 5. Vary Sentence Starters - MODIFIED to preserve paragraph structure
 const varySentenceStarters = (text: string): string => {
-  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  // Skip if text has structural markers
+  if (/^#{1,6}\s/.test(text) || /^[•·▪◦●■□*\-+]/.test(text)) {
+    return text;
+  }
   
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
   if (sentences.length <= 1) return text;
   
   const naturalStarters = [
@@ -312,10 +250,7 @@ const varySentenceStarters = (text: string): string => {
   
   for (let i = 0; i < sentences.length; i++) {
     let sentence = sentences[i].trim();
-    
-    // Skip very short sentences
     if (sentence.split(' ').length > 5) {
-      // Don't change first sentence
       if (i > 0 && Math.random() < 0.25) {
         let starter;
         let attempts = 0;
@@ -324,10 +259,7 @@ const varySentenceStarters = (text: string): string => {
           attempts++;
         } while (usedStarters.has(starter) && attempts < 10);
         usedStarters.add(starter);
-        
-        // Add starter at beginning
         sentence = starter + ' ' + sentence.charAt(0).toLowerCase() + sentence.slice(1);
-        // Remove duplicate periods
         sentence = sentence.replace(/\.\./g, '.');
       }
     }
@@ -340,48 +272,17 @@ const varySentenceStarters = (text: string): string => {
 // 6. Add Natural Contractions
 const addNaturalContractions = (text: string): string => {
   const contractions: { [key: string]: string } = {
-    'i am': "I'm",
-    'i have': "I've",
-    'i will': "I'll",
-    'i would': "I'd",
-    'you are': "you're",
-    'you have': "you've",
-    'you will': "you'll",
-    'you would': "you'd",
-    'we are': "we're",
-    'we have': "we've",
-    'we will': "we'll",
-    'we would': "we'd",
-    'they are': "they're",
-    'they have': "they've",
-    'they will': "they'll",
-    'they would': "they'd",
-    'he is': "he's",
-    'he has': "he's",
-    'he will': "he'll",
-    'he would': "he'd",
-    'she is': "she's",
-    'she has': "she's",
-    'she will': "she'll",
-    'she would': "she'd",
-    'it is': "it's",
-    'it has': "it's",
-    'it will': "it'll",
-    'would not': "wouldn't",
-    'could not': "couldn't",
-    'should not': "shouldn't",
-    'will not': "won't",
-    'cannot': "can't",
-    'do not': "don't",
-    'does not': "doesn't",
-    'did not': "didn't",
-    'have not': "haven't",
-    'has not': "hasn't",
-    'had not': "hadn't",
-    'are not': "aren't",
-    'is not': "isn't",
-    'was not': "wasn't",
-    'were not': "weren't",
+    'i am': "I'm", 'i have': "I've", 'i will': "I'll", 'i would': "I'd",
+    'you are': "you're", 'you have': "you've", 'you will': "you'll", 'you would': "you'd",
+    'we are': "we're", 'we have': "we've", 'we will': "we'll", 'we would': "we'd",
+    'they are': "they're", 'they have': "they've", 'they will': "they'll", 'they would': "they'd",
+    'he is': "he's", 'he has': "he's", 'he will': "he'll", 'he would': "he'd",
+    'she is': "she's", 'she has': "she's", 'she will': "she'll", 'she would': "she'd",
+    'it is': "it's", 'it has': "it's", 'it will': "it'll",
+    'would not': "wouldn't", 'could not': "couldn't", 'should not': "shouldn't",
+    'will not': "won't", 'cannot': "can't", 'do not': "don't", 'does not': "doesn't",
+    'did not': "didn't", 'have not': "haven't", 'has not': "hasn't", 'had not': "hadn't",
+    'are not': "aren't", 'is not': "isn't", 'was not': "wasn't", 'were not': "weren't",
   };
   
   let result = text;
@@ -419,11 +320,14 @@ const makeMoreSpecific = (text: string): string => {
   return result;
 };
 
-// ============ PRESERVE STRUCTURE HELPER ============
+// ============ PRESERVE STRUCTURE HELPER - ENHANCED ============
+// This function preserves paragraphs, line breaks, bullet points, headings, etc.
 const preserveStructure = (text: string, humanizeFn: (line: string) => string): string => {
+  // Split by paragraphs (double newline)
   const paragraphs = text.split(/\n\s*\n/);
   
   const processedParagraphs = paragraphs.map(paragraph => {
+    // Split by lines within paragraph
     const lines = paragraph.split(/\n/);
     
     const processedLines = lines.map(line => {
@@ -431,8 +335,9 @@ const preserveStructure = (text: string, humanizeFn: (line: string) => string): 
       const trailingWhitespace = line.match(/\s*$/)?.[0] || '';
       const content = line.trim();
       
-      if (!content) return line;
+      if (!content) return line; // Keep empty lines
       
+      // Check for bullet points or numbered lists
       const bulletMatch = content.match(/^([•·▪◦●■□*\-+]|\d+[.)]|[a-zA-Z][.)])(\s+)/);
       if (bulletMatch) {
         const bullet = bulletMatch[1];
@@ -442,6 +347,7 @@ const preserveStructure = (text: string, humanizeFn: (line: string) => string): 
         return `${leadingWhitespace}${bullet}${space}${humanizedContent}${trailingWhitespace}`;
       }
       
+      // Check for heading patterns
       const headingMatch = content.match(/^(#{1,6})\s+(.+)/);
       if (headingMatch) {
         const hashes = headingMatch[1];
@@ -450,6 +356,23 @@ const preserveStructure = (text: string, humanizeFn: (line: string) => string): 
         return `${leadingWhitespace}${hashes} ${humanizedHeading}${trailingWhitespace}`;
       }
       
+      // Check for checkbox/task list
+      const checkboxMatch = content.match(/^(\s*)([-*+])\s+\[([ xX])\]\s+(.+)/);
+      if (checkboxMatch) {
+        const indent = checkboxMatch[1] || '';
+        const marker = checkboxMatch[2];
+        const checked = checkboxMatch[3];
+        const textContent = checkboxMatch[4];
+        const humanizedContent = humanizeFn(textContent);
+        return `${indent}${marker} [${checked}] ${humanizedContent}`;
+      }
+      
+      // Check for horizontal rule
+      if (/^[-*_]{3,}$/.test(content)) {
+        return content;
+      }
+      
+      // Check for formatting (bold, italic)
       const formattingMatch = content.match(/^(\*{1,3}|_{1,3})(.+?)\1$/);
       if (formattingMatch) {
         const marker = formattingMatch[1];
@@ -458,6 +381,7 @@ const preserveStructure = (text: string, humanizeFn: (line: string) => string): 
         return `${leadingWhitespace}${marker}${humanizedContent}${marker}${trailingWhitespace}`;
       }
       
+      // Regular line - humanize the content
       const humanizedContent = humanizeFn(content);
       return `${leadingWhitespace}${humanizedContent}${trailingWhitespace}`;
     });
@@ -465,6 +389,7 @@ const preserveStructure = (text: string, humanizeFn: (line: string) => string): 
     return processedLines.join('\n');
   });
   
+  // Join paragraphs with double newline to preserve paragraph breaks
   return processedParagraphs.join('\n\n');
 };
 
@@ -474,6 +399,10 @@ const replaceWordsInLine = (line: string, rate: number): string => {
   
   for (let i = 0; i < words.length; i++) {
     const cleanWord = words[i].toLowerCase().replace(/[^a-z]/g, '');
+    // Skip words that are part of structure
+    if (i === 0 && (line.trim().startsWith('#') || /^[•·▪◦●■□*\-+]|\d+[.)]|[a-zA-Z][.)]/.test(cleanWord))) {
+      continue;
+    }
     if (Math.random() < rate && hasReplacement(cleanWord)) {
       const replacement = getRandomReplacement(cleanWord);
       if (replacement) {
@@ -527,11 +456,14 @@ const applyMediumHumanization = (text: string): string => {
   });
 };
 
-// ============ ENHANCED HEAVY RESTRUCTURING ============
-
+// ============ HEAVY RESTRUCTURING FUNCTIONS ============
 const restructureSentenceHeavy = (sentence: string): string => {
-  let result = sentence;
+  // Skip if it's a heading or bullet
+  if (/^#{1,6}\s/.test(sentence) || /^[•·▪◦●■□*\-+]/.test(sentence)) {
+    return sentence;
+  }
   
+  let result = sentence;
   const patterns = [
     {
       regex: /^(Because|Since|As|Given that)\s+(.+?),\s*(.+?)(\.|!|\?)/i,
@@ -570,6 +502,11 @@ const restructureSentenceHeavy = (sentence: string): string => {
 };
 
 const changeVoiceHeavy = (sentence: string): string => {
+  // Skip if it's a heading or bullet
+  if (/^#{1,6}\s/.test(sentence) || /^[•·▪◦●■□*\-+]/.test(sentence)) {
+    return sentence;
+  }
+  
   const activeSimple = sentence.match(/^(\w+)\s+(\w+[sd]?)\s+(\w+)(\.|!|\?)/i);
   if (activeSimple) {
     const subject = activeSimple[1];
@@ -688,24 +625,18 @@ export const humanizeText = async (
   // Apply internal grammar corrections
   humanized = applyGrammarCorrections(humanized);
   
-  // ============ NEW: Apply LanguageTool API Grammar Check ============
+  // Apply LanguageTool API Grammar Check
   try {
     const language = tone === 'casual' ? 'en-US' : 'en-US';
     const grammarResult = await checkGrammarWithLanguageTool(humanized, language);
     
     if (grammarResult.matches && grammarResult.matches.length > 0) {
-      // Apply corrections from the API
       humanized = applyGrammarAPICorrections(humanized, grammarResult.matches);
-      
-      // Update changes count to include grammar fixes
       changes.wordsChanged += grammarResult.matches.length;
     }
   } catch (error) {
-    // Gracefully fall back to internal corrections only
     console.warn('LanguageTool API failed, using internal corrections only:', error);
-    // humanized already has internal corrections applied
   }
-  // ============ END OF NEW GRAMMAR API INTEGRATION ============
 
   return {
     original: text,
@@ -795,20 +726,13 @@ const fixArticles = (text: string): string => {
 
 const fixPrepositions = (text: string): string => {
   const corrections: { [key: string]: string } = {
-    'different than': 'different from',
-    'different to': 'different from',
-    'prior to': 'before',
-    'subsequent to': 'after',
-    'in regards to': 'regarding',
-    'irregardless of': 'regardless of',
-    'due to the fact that': 'because',
-    'in the event that': 'if',
-    'at this point in time': 'now',
-    'for the purpose of': 'for',
-    'in close proximity to': 'near',
-    'at the present time': 'now',
-    'in the near future': 'soon',
-    'on a regular basis': 'regularly',
+    'different than': 'different from', 'different to': 'different from',
+    'prior to': 'before', 'subsequent to': 'after',
+    'in regards to': 'regarding', 'irregardless of': 'regardless of',
+    'due to the fact that': 'because', 'in the event that': 'if',
+    'at this point in time': 'now', 'for the purpose of': 'for',
+    'in close proximity to': 'near', 'at the present time': 'now',
+    'in the near future': 'soon', 'on a regular basis': 'regularly',
     'in a timely manner': 'promptly',
   };
   
