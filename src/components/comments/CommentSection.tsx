@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Box,
   Typography,
-  TextField,
   Button,
   Avatar,
   Stack,
@@ -18,6 +17,12 @@ import {
   Fade,
   useMediaQuery,
   useTheme,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Paper,
+  TextField,
 } from '@mui/material';
 import {
   Reply,
@@ -33,10 +38,73 @@ import { supabase } from '../../services/supabaseClient';
 import { Comment } from '../../types/comment';
 import CommentDialog from '../CommentDialog';
 import { useToast } from '../../context/ToastContext';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 interface CommentSectionProps {
   onCommentAdded?: () => void;
 }
+
+// Custom Tooltip component for editor buttons
+const EditorTooltip: React.FC<{
+  title: string;
+  children: React.ReactElement;
+  placement?: 'top' | 'bottom' | 'left' | 'right';
+}> = ({ title, children, placement = 'top' }) => {
+  return (
+    <Tooltip 
+      title={title} 
+      placement={placement}
+      arrow
+      enterDelay={300}
+      leaveDelay={100}
+      slotProps={{
+        tooltip: {
+          sx: {
+            backgroundColor: (theme) => theme.palette.mode === 'dark' ? '#3d3d3d' : '#333',
+            color: '#fff',
+            fontSize: '0.7rem',
+            padding: '6px 12px',
+            borderRadius: '6px',
+            maxWidth: '200px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          },
+        },
+        arrow: {
+          sx: {
+            color: (theme) => theme.palette.mode === 'dark' ? '#3d3d3d' : '#333',
+          },
+        },
+      }}
+    >
+      {children}
+    </Tooltip>
+  );
+};
+
+// Quill modules with custom tooltips
+const getQuillModules = (isReply: boolean) => ({
+  toolbar: {
+    container: [
+      ['bold', 'italic', 'underline', 'strike'],
+      ['blockquote'],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      ['link'],
+      ['clean']
+    ],
+    handlers: {
+      // Custom handlers if needed
+    }
+  },
+});
+
+const quillFormats = [
+  'header',
+  'bold', 'italic', 'underline', 'strike',
+  'blockquote', 'code-block',
+  'list', 'bullet',
+  'link',
+];
 
 // Single Comment Component
 const SingleComment: React.FC<{
@@ -68,17 +136,22 @@ const SingleComment: React.FC<{
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isDark = theme.palette.mode === 'dark';
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [editContent, setEditContent] = useState(comment.content);
   const [replyContent, setReplyContent] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
   const [showReplyBox, setShowReplyBox] = useState(false);
   const [showReplies, setShowReplies] = useState(true);
+  const [isReplyFocused, setIsReplyFocused] = useState(false);
   const { showSuccess, showError } = useToast();
 
   const isOwner = userEmail === comment.user_id;
   const hasReplies = comment.replies && comment.replies.length > 0;
   const isReply = depth > 0;
+
+  // Memoize Quill modules for performance
+  const quillModulesReply = useMemo(() => getQuillModules(true), []);
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -100,7 +173,7 @@ const SingleComment: React.FC<{
   };
 
   const handleSaveEdit = async () => {
-    if (!editContent.trim()) {
+    if (!editContent.trim() || editContent === '<p><br></p>') {
       showError('Comment cannot be empty');
       return;
     }
@@ -128,10 +201,11 @@ const SingleComment: React.FC<{
     setShowReplyBox(false);
     setReplyContent('');
     setReplyingTo(null);
+    setIsReplyFocused(false);
   };
 
   const handleSubmitReply = async () => {
-    if (!replyContent.trim()) {
+    if (!replyContent.trim() || replyContent === '<p><br></p>') {
       showError('Reply cannot be empty');
       return;
     }
@@ -142,6 +216,7 @@ const SingleComment: React.FC<{
       setReplyContent('');
       setShowReplyBox(false);
       setReplyingTo(null);
+      setIsReplyFocused(false);
       showSuccess('Reply added!');
     } catch (error) {
       showError('Failed to add reply');
@@ -174,12 +249,110 @@ const SingleComment: React.FC<{
   const avatarColor = getAvatarColor(comment.user_id);
   const avatarSize = isMobile ? 32 : 40;
 
+  // Quill styles - NO BORDERS, smooth animation
+  const getQuillStyles = (isReply: boolean, isFocused: boolean) => ({
+    minHeight: isReply ? '100px' : '150px',
+    maxHeight: isReply ? '300px' : '500px',
+    height: 'auto',
+    marginBottom: isFocused ? '55px' : '10px',
+    backgroundColor: 'transparent',
+    color: isDark ? '#e0e0e0' : '#333333',
+    border: 'none',
+    borderRadius: '8px',
+    transition: 'all 0.3s ease',
+    '& .ql-toolbar': {
+      backgroundColor: 'transparent',
+      border: 'none',
+      borderRadius: '8px 8px 0 0',
+      borderBottom: isFocused ? `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'}` : 'none',
+      opacity: isFocused ? 1 : 0,
+      maxHeight: isFocused ? '60px' : '0px',
+      padding: isFocused ? '8px 4px' : '0px',
+      overflow: 'hidden',
+      transition: 'all 0.3s ease',
+      transform: isFocused ? 'translateY(0)' : 'translateY(-10px)',
+      pointerEvents: isFocused ? 'auto' : 'none',
+      // Custom tooltip styles for Quill toolbar buttons
+      '& .ql-bold .ql-stroke': { strokeWidth: '2px' },
+      '& .ql-italic .ql-stroke': { strokeWidth: '2px' },
+      '& .ql-underline .ql-stroke': { strokeWidth: '2px' },
+      '& .ql-strike .ql-stroke': { strokeWidth: '2px' },
+    },
+    '& .ql-container': {
+      backgroundColor: 'transparent',
+      border: 'none',
+      borderRadius: isFocused ? '0 0 8px 8px' : '8px',
+      fontSize: '0.9375rem',
+      fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
+      minHeight: isReply ? '80px' : '120px',
+      maxHeight: isReply ? '250px' : '450px',
+      overflowY: 'auto',
+      cursor: 'text',
+      transition: 'all 0.3s ease',
+    },
+    '& .ql-editor': {
+      color: isDark ? '#e0e0e0' : '#333333',
+      minHeight: isReply ? '80px' : '120px',
+      maxHeight: isReply ? '250px' : '450px',
+      overflowY: 'auto',
+      padding: isFocused ? '12px 16px' : '12px 16px',
+      fontSize: '0.9375rem',
+      lineHeight: '1.7',
+      '&:focus': {
+        outline: 'none',
+      },
+      '&::-webkit-scrollbar': {
+        width: '6px',
+      },
+      '&::-webkit-scrollbar-track': {
+        background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+        borderRadius: '3px',
+      },
+      '&::-webkit-scrollbar-thumb': {
+        background: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)',
+        borderRadius: '3px',
+        '&:hover': {
+          background: isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)',
+        },
+      },
+    },
+    '& .ql-editor.ql-blank::before': {
+      color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)',
+      fontStyle: 'italic',
+    },
+    '& .ql-stroke': {
+      stroke: isDark ? '#e0e0e0' : '#333333',
+    },
+    '& .ql-fill': {
+      fill: isDark ? '#e0e0e0' : '#333333',
+    },
+    '& .ql-picker-label': {
+      color: isDark ? '#e0e0e0' : '#333333',
+    },
+    '& .ql-picker-options': {
+      backgroundColor: isDark ? '#2d2d2d' : '#ffffff',
+      color: isDark ? '#e0e0e0' : '#333333',
+      border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.06)',
+    },
+    '& .ql-toolbar .ql-active': {
+      color: isDark ? '#90caf9' : '#1976d2',
+    },
+    '& .ql-toolbar button:hover': {
+      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+      borderRadius: '4px',
+    },
+    '& .ql-toolbar button.ql-active': {
+      backgroundColor: isDark ? 'rgba(144, 202, 249, 0.15)' : 'rgba(25, 118, 210, 0.08)',
+      borderRadius: '4px',
+    },
+  });
+
   return (
     <Box 
       sx={{ 
         ml: isReply ? (isMobile ? 2 : 3) : 0,
         pl: isReply ? (isMobile ? 1.5 : 2) : 0,
-        borderLeft: isReply ? `2px solid ${avatarColor}30` : 'none',
+        borderLeft: isReply ? `2px solid ${avatarColor}15` : 'none',
         position: 'relative',
         transition: 'all 0.2s ease',
         pt: 1,
@@ -194,10 +367,6 @@ const SingleComment: React.FC<{
             borderRadius: 2,
             backgroundColor: 'transparent',
             transition: 'all 0.2s ease',
-            border: 'none',
-            '&:hover': {
-              backgroundColor: isReply ? 'rgba(0,0,0,0.02)' : 'transparent',
-            },
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: isMobile ? 1.5 : 2 }}>
@@ -209,8 +378,7 @@ const SingleComment: React.FC<{
                 fontSize: isMobile ? '0.75rem' : '1rem',
                 fontWeight: 600,
                 boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                border: '2px solid',
-                borderColor: 'background.paper',
+                border: 'none',
               }}
             >
               {initials}
@@ -235,6 +403,8 @@ const SingleComment: React.FC<{
                       fontSize: isMobile ? '0.5rem' : '0.6rem',
                       fontWeight: 600,
                       '& .MuiChip-label': { px: 0.75 },
+                      border: 'none',
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
                     }} 
                   />
                 )}
@@ -255,6 +425,7 @@ const SingleComment: React.FC<{
                       fontSize: isMobile ? '0.5rem' : '0.6rem',
                       fontWeight: 600,
                       '& .MuiChip-label': { px: 0.75 },
+                      border: 'none',
                     }} 
                   />
                 )}
@@ -262,17 +433,17 @@ const SingleComment: React.FC<{
 
               {editingComment === comment.id ? (
                 <Box sx={{ mt: 1 }}>
-                  <TextField
-                    fullWidth
-                    multiline
-                    rows={isMobile ? 2 : 3}
-                    value={editContent}
-                    onChange={(e) => setEditContent(e.target.value)}
-                    variant="outlined"
-                    size="small"
-                    autoFocus
-                  />
-                  <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
+                  <Box sx={getQuillStyles(true, true)}>
+                    <ReactQuill
+                      theme="snow"
+                      value={editContent}
+                      onChange={setEditContent}
+                      modules={quillModulesReply}
+                      formats={quillFormats}
+                      placeholder="Edit your comment..."
+                    />
+                  </Box>
+                  <Stack direction="row" spacing={0.5} sx={{ mt: 1 }}>
                     <Button variant="contained" size="small" onClick={handleSaveEdit} startIcon={<Send />}>
                       Save
                     </Button>
@@ -282,16 +453,59 @@ const SingleComment: React.FC<{
                   </Stack>
                 </Box>
               ) : (
-                <Typography variant="body2" sx={{ 
-                  fontSize: '0.9375rem', 
-                  lineHeight: 1.7,
-                  color: 'text.primary',
-                  whiteSpace: 'pre-wrap', 
-                  wordWrap: 'break-word',
-                  mt: 0.5,
-                }}>
-                  {comment.content}
-                </Typography>
+                <Box
+                  className="ql-editor"
+                  sx={{
+                    fontSize: '0.9375rem',
+                    lineHeight: 1.7,
+                    color: 'text.primary',
+                    wordWrap: 'break-word',
+                    mt: 0.5,
+                    padding: 0,
+                    maxHeight: '400px',
+                    overflowY: 'auto',
+                    border: 'none',
+                    '&::-webkit-scrollbar': {
+                      width: '6px',
+                    },
+                    '&::-webkit-scrollbar-track': {
+                      background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                      borderRadius: '3px',
+                    },
+                    '&::-webkit-scrollbar-thumb': {
+                      background: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)',
+                      borderRadius: '3px',
+                      '&:hover': {
+                        background: isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)',
+                      },
+                    },
+                    '& p': { margin: '0 0 4px 0' },
+                    '& ul, & ol': { paddingLeft: '24px', margin: '4px 0' },
+                    '& blockquote': {
+                      borderLeft: `4px solid ${isDark ? '#90caf9' : '#667eea'}`,
+                      paddingLeft: '12px',
+                      margin: '8px 0',
+                      color: isDark ? '#b0b0c8' : '#666',
+                      fontStyle: 'italic',
+                    },
+                    '& a': {
+                      color: isDark ? '#90caf9' : '#667eea',
+                      textDecoration: 'underline',
+                    },
+                    '& strong': { fontWeight: 700 },
+                    '& em': { fontStyle: 'italic' },
+                    '& u': { textDecoration: 'underline' },
+                    '& strike': { textDecoration: 'line-through' },
+                    '& code': {
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#f5f5f5',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      fontFamily: 'monospace',
+                      fontSize: '0.85em',
+                    },
+                  }}
+                  dangerouslySetInnerHTML={{ __html: comment.content }}
+                />
               )}
 
               {!editingComment && (
@@ -305,8 +519,9 @@ const SingleComment: React.FC<{
                       fontSize: isMobile ? '0.7rem' : '0.75rem',
                       borderRadius: 2,
                       textTransform: 'none',
+                      border: 'none',
                       '&:hover': {
-                        backgroundColor: 'rgba(0,0,0,0.04)',
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
                       },
                     }}
                   >
@@ -322,8 +537,9 @@ const SingleComment: React.FC<{
                         fontSize: isMobile ? '0.7rem' : '0.75rem',
                         borderRadius: 2,
                         textTransform: 'none',
+                        border: 'none',
                         '&:hover': {
-                          backgroundColor: 'rgba(0,0,0,0.04)',
+                          backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
                         },
                       }}
                     >
@@ -333,7 +549,7 @@ const SingleComment: React.FC<{
 
                   {isOwner && (
                     <>
-                      <IconButton size="small" onClick={handleMenuOpen} sx={{ p: 0.5 }}>
+                      <IconButton size="small" onClick={handleMenuOpen} sx={{ p: 0.5, border: 'none' }}>
                         <MoreVert sx={{ fontSize: isMobile ? 16 : 18 }} />
                       </IconButton>
                       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
@@ -356,53 +572,29 @@ const SingleComment: React.FC<{
 
           <Collapse in={showReplyBox && !!userEmail} timeout="auto">
             <Box sx={{ mt: 1.5, pl: isMobile ? 4 : 6 }}>
-              <Divider sx={{ mb: 1.5 }} />
+              <Divider sx={{ mb: 1.5, borderColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)' }} />
               <Box sx={{ display: 'flex', gap: isMobile ? 1 : 2 }}>
-                <Avatar sx={{ width: isMobile ? 28 : 32, height: isMobile ? 28 : 32, bgcolor: '#667eea' }}>
+                <Avatar sx={{ width: isMobile ? 28 : 32, height: isMobile ? 28 : 32, bgcolor: '#667eea', border: 'none' }}>
                   <Person fontSize="small" />
                 </Avatar>
                 <Box sx={{ flex: 1 }}>
-                  <TextField
-                    fullWidth
-                    multiline
-                    rows={1}
-                    placeholder={`Reply to ${displayName}...`}
-                    value={replyContent}
-                    onChange={(e) => setReplyContent(e.target.value)}
-                    variant="standard"
-                    size="small"
-                    autoFocus
-                    disabled={isSubmittingReply}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSubmitReply();
-                      }
-                    }}
-                    sx={{
-                      '& .MuiInput-root': {
-                        backgroundColor: 'transparent',
-                        fontSize: isMobile ? '0.875rem' : '0.9375rem',
-                        padding: '4px 0',
-                        '&:before': {
-                          borderBottom: '1px solid',
-                          borderColor: 'divider',
-                        },
-                        '&:hover:not(.Mui-disabled):before': {
-                          borderBottom: '2px solid',
-                          borderColor: 'primary.main',
-                        },
-                        '&:after': {
-                          borderBottom: '2px solid',
-                          borderColor: 'primary.main',
-                        },
-                      },
-                      '& .MuiInput-input': {
-                        padding: '8px 0',
-                      },
-                    }}
-                  />
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5, mt: 0.5 }}>
+                  <Box sx={getQuillStyles(true, isReplyFocused)}>
+                    <ReactQuill
+                      theme="snow"
+                      value={replyContent}
+                      onChange={setReplyContent}
+                      modules={quillModulesReply}
+                      formats={quillFormats}
+                      placeholder={`Reply to ${displayName}...`}
+                      onFocus={() => setIsReplyFocused(true)}
+                      onBlur={() => {
+                        if (!replyContent || replyContent === '<p><br></p>') {
+                          setIsReplyFocused(false);
+                        }
+                      }}
+                    />
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5, mt: 1 }}>
                     <Button
                       size="small"
                       variant="text"
@@ -415,24 +607,45 @@ const SingleComment: React.FC<{
                         fontSize: '0.75rem',
                         minWidth: 'auto',
                         px: 1,
+                        border: 'none',
                       }}
                     >
                       Cancel
                     </Button>
                     <Button
                       size="small"
-                      variant="text"
                       onClick={handleSubmitReply}
-                      disabled={!replyContent.trim() || isSubmittingReply}
-                      startIcon={isSubmittingReply ? <CircularProgress size={14} /> : <Send sx={{ fontSize: 14 }} />}
+                      disabled={!replyContent.trim() || replyContent === '<p><br></p>' || isSubmittingReply}
+                      startIcon={isSubmittingReply ? <CircularProgress size={14} color="inherit" /> : <Send sx={{ fontSize: 14 }} />}
                       sx={{ 
                         borderRadius: 2, 
                         textTransform: 'none',
-                        color: 'primary.main',
                         fontWeight: 600,
                         fontSize: '0.75rem',
                         minWidth: 'auto',
-                        px: 1,
+                        px: 2.5,
+                        py: 0.75,
+                        background: isDark 
+                          ? 'linear-gradient(135deg, rgba(144, 202, 249, 0.2), rgba(144, 202, 249, 0.05))'
+                          : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        color: isDark ? '#90caf9' : '#fff',
+                        border: '1px solid',
+                        borderColor: isDark ? 'rgba(144, 202, 249, 0.2)' : 'transparent',
+                        boxShadow: isDark 
+                          ? 'none'
+                          : '0 4px 20px rgba(102, 126, 234, 0.3)',
+                        '&:hover': {
+                          background: isDark 
+                            ? 'linear-gradient(135deg, rgba(144, 202, 249, 0.3), rgba(144, 202, 249, 0.1))'
+                            : 'linear-gradient(135deg, #5a6fd6 0%, #6a3f9a 100%)',
+                          boxShadow: isDark 
+                            ? '0 0 20px rgba(144, 202, 249, 0.1)'
+                            : '0 6px 30px rgba(102, 126, 234, 0.4)',
+                          transform: 'translateY(-1px)',
+                        },
+                        '&:active': {
+                          transform: 'scale(0.97)',
+                        },
                       }}
                     >
                       Reply
@@ -473,6 +686,7 @@ const SingleComment: React.FC<{
 export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isDark = theme.palette.mode === 'dark';
   const { showSuccess, showError } = useToast();
   
   const [comments, setComments] = useState<Comment[]>([]);
@@ -494,7 +708,115 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
   const [dialogMode, setDialogMode] = useState<'initial' | 'edit'>('initial');
   const [pendingAction, setPendingAction] = useState<'comment' | 'reply' | null>(null);
   const [existingUser, setExistingUser] = useState<{ email: string; name: string; is_anonymous: boolean } | null>(null);
+  const [isMainFocused, setIsMainFocused] = useState(false);
   const isMounted = useRef(true);
+
+  // Memoize Quill modules for performance
+  const quillModulesMain = useMemo(() => ({
+    toolbar: {
+      container: [
+        [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+        ['bold', 'italic', 'underline', 'strike'],
+        ['blockquote', 'code-block'],
+        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+        ['link'],
+        ['clean']
+      ],
+    }
+  }), []);
+
+  // Main Quill styles - NO BORDERS, smooth animation
+  const getMainQuillStyles = (isFocused: boolean) => ({
+    minHeight: '150px',
+    maxHeight: '500px',
+    height: 'auto',
+    marginBottom: isFocused ? '55px' : '10px',
+    backgroundColor: 'transparent',
+    color: isDark ? '#e0e0e0' : '#333333',
+    border: 'none',
+    borderRadius: '8px',
+    transition: 'all 0.3s ease',
+    '& .ql-toolbar': {
+      backgroundColor: 'transparent',
+      border: 'none',
+      borderRadius: '8px 8px 0 0',
+      borderBottom: isFocused ? `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'}` : 'none',
+      opacity: isFocused ? 1 : 0,
+      maxHeight: isFocused ? '60px' : '0px',
+      padding: isFocused ? '8px 4px' : '0px',
+      overflow: 'hidden',
+      transition: 'all 0.3s ease',
+      transform: isFocused ? 'translateY(0)' : 'translateY(-10px)',
+      pointerEvents: isFocused ? 'auto' : 'none',
+    },
+    '& .ql-container': {
+      backgroundColor: 'transparent',
+      border: 'none',
+      borderRadius: isFocused ? '0 0 8px 8px' : '8px',
+      fontSize: '0.9375rem',
+      fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
+      minHeight: '120px',
+      maxHeight: '450px',
+      overflowY: 'auto',
+      cursor: 'text',
+      transition: 'all 0.3s ease',
+    },
+    '& .ql-editor': {
+      color: isDark ? '#e0e0e0' : '#333333',
+      minHeight: '120px',
+      maxHeight: '450px',
+      overflowY: 'auto',
+      padding: '12px 16px',
+      fontSize: '0.9375rem',
+      lineHeight: '1.7',
+      '&:focus': {
+        outline: 'none',
+      },
+      '&::-webkit-scrollbar': {
+        width: '6px',
+      },
+      '&::-webkit-scrollbar-track': {
+        background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+        borderRadius: '3px',
+      },
+      '&::-webkit-scrollbar-thumb': {
+        background: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)',
+        borderRadius: '3px',
+        '&:hover': {
+          background: isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)',
+        },
+      },
+    },
+    '& .ql-editor.ql-blank::before': {
+      color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)',
+      fontStyle: 'italic',
+    },
+    '& .ql-stroke': {
+      stroke: isDark ? '#e0e0e0' : '#333333',
+    },
+    '& .ql-fill': {
+      fill: isDark ? '#e0e0e0' : '#333333',
+    },
+    '& .ql-picker-label': {
+      color: isDark ? '#e0e0e0' : '#333333',
+    },
+    '& .ql-picker-options': {
+      backgroundColor: isDark ? '#2d2d2d' : '#ffffff',
+      color: isDark ? '#e0e0e0' : '#333333',
+      border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.06)',
+    },
+    '& .ql-toolbar .ql-active': {
+      color: isDark ? '#90caf9' : '#1976d2',
+    },
+    '& .ql-toolbar button:hover': {
+      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+      borderRadius: '4px',
+    },
+    '& .ql-toolbar button.ql-active': {
+      backgroundColor: isDark ? 'rgba(144, 202, 249, 0.15)' : 'rgba(25, 118, 210, 0.08)',
+      borderRadius: '4px',
+    },
+  });
 
   const fetchComments = useCallback(async () => {
     try {
@@ -564,16 +886,12 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
     checkUser();
   }, [userEmail]);
 
-  // ============ FIXED: Handle User Submit (Create or Update) ============
   const handleUserSubmit = async (user: { email: string; name: string; is_anonymous: boolean }) => {
-    // Check if this is an update (user already exists)
     const isUpdate = existingUser && existingUser.email === user.email;
     
     if (isUpdate) {
-      // Update existing user in database
       try {
         await commentService.updateUserProfile(user.email, user.name, user.is_anonymous);
-        // Update local state
         setExistingUser({
           email: user.email,
           name: user.name,
@@ -592,7 +910,6 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
         return;
       }
     } else {
-      // New user - save to localStorage and state
       setUserEmail(user.email);
       setUserName(user.name);
       setIsAnonymous(user.is_anonymous);
@@ -614,7 +931,6 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
     setPendingAction(null);
   };
 
-  // ============ FIXED: Handle Update User ============
   const handleUpdateUser = async (user: { email: string; name: string; is_anonymous: boolean }) => {
     try {
       await commentService.updateUserProfile(user.email, user.name, user.is_anonymous);
@@ -646,7 +962,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
     }
 
     const trimmedComment = newComment.trim();
-    if (!trimmedComment) {
+    if (!trimmedComment || trimmedComment === '<p><br></p>') {
       showError('Comment cannot be empty');
       return;
     }
@@ -664,6 +980,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
       );
       
       setNewComment('');
+      setIsMainFocused(false);
       showSuccess('Comment added!');
     } catch (error) {
       console.error('Error adding comment:', error);
@@ -773,10 +1090,16 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
 
   return (
     <>
-      <Box sx={{ p: isMobile ? 2 : 3, mt: isMobile ? 2 : 3, borderRadius: isMobile ? 2 : 3 }}>
+      <Box sx={{ p: isMobile ? 2 : 3, mt: isMobile ? 2 : 3 }}>
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: isMobile ? 2 : 3, flexWrap: 'wrap', gap: 1 }}>
-          <Typography variant={isMobile ? 'subtitle1' : 'h6'} sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant={isMobile ? 'subtitle1' : 'h6'} sx={{ 
+            fontWeight: 700, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+            color: 'text.primary',
+          }}>
             💬 Discussion
             <Chip 
               label={comments.length} 
@@ -785,8 +1108,9 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
                 fontWeight: 600,
                 height: isMobile ? 20 : 24,
                 fontSize: isMobile ? '0.65rem' : '0.75rem',
-                backgroundColor: 'primary.main',
-                color: '#fff',
+                backgroundColor: isDark ? 'rgba(144, 202, 249, 0.15)' : 'primary.main',
+                color: isDark ? '#90caf9' : '#fff',
+                border: 'none',
                 '& .MuiChip-label': { px: 1 },
               }}
             />
@@ -796,113 +1120,163 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
               size="small"
               startIcon={<Person />}
               onClick={handleEditUser}
-              sx={{ textTransform: 'none', fontSize: '0.75rem' }}
+              sx={{ 
+                textTransform: 'none', 
+                fontSize: '0.75rem',
+                color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)',
+                border: 'none',
+                '&:hover': {
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
+                },
+              }}
             >
               {isAnonymous ? 'Anonymous' : userName}
             </Button>
           )}
         </Box>
 
-        {/* Comment Input */}
+        {/* Comment Input - Word-like WYSIWYG Editor with hidden toolbar */}
         <Box sx={{ 
-          mb: isMobile ? 2 : 3, 
+          mb: isMobile ? 2 : 3,
           p: isMobile ? 1.5 : 2,
           borderRadius: 2,
+          backgroundColor: 'transparent',
           display: 'flex',
           gap: isMobile ? 1.5 : 2,
           alignItems: 'flex-start',
-          transition: 'all 0.2s ease',
         }}>
-          <Avatar sx={{ width: isMobile ? 32 : 40, height: isMobile ? 32 : 40, bgcolor: '#667eea' }}>
+          <Avatar sx={{ width: isMobile ? 32 : 40, height: isMobile ? 32 : 40, bgcolor: '#667eea', border: 'none' }}>
             <Person />
           </Avatar>
           <Box sx={{ flex: 1 }}>
-            <TextField
-              fullWidth
-              multiline
-              rows={1}
-              placeholder={userEmail ? "What are your thoughts?" : "Click here to add your name and email to comment"}
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              disabled={isSubmitting}
-              variant="standard"
-              size="small"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleAddComment();
-                }
-              }}
-              onClick={() => {
-                if (!userEmail) {
+            {userEmail ? (
+              <Box sx={getMainQuillStyles(isMainFocused)}>
+                <ReactQuill
+                  theme="snow"
+                  value={newComment}
+                  onChange={setNewComment}
+                  modules={quillModulesMain}
+                  formats={quillFormats}
+                  placeholder="What are your thoughts? (Click to show toolbar)"
+                  onFocus={() => setIsMainFocused(true)}
+                  onBlur={() => {
+                    if (!newComment || newComment === '<p><br></p>') {
+                      setIsMainFocused(false);
+                    }
+                  }}
+                />
+              </Box>
+            ) : (
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                placeholder="Click here to add your name and email to comment"
+                value={newComment}
+                disabled
+                variant="outlined"
+                onClick={() => {
                   setPendingAction('comment');
                   setDialogMode('initial');
                   setDialogOpen(true);
-                }
-              }}
-              sx={{
-                '& .MuiInput-root': {
-                  backgroundColor: 'transparent',
-                  fontSize: isMobile ? '0.875rem' : '0.9375rem',
-                  padding: '4px 0',
-                  '&:before': {
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    backgroundColor: 'transparent',
+                    fontSize: '0.9375rem',
+                    fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
+                    borderRadius: 2,
+                    cursor: 'pointer',
+                    border: 'none',
+                    '& fieldset': {
+                      border: 'none',
+                    },
+                    '&:hover fieldset': {
+                      border: 'none',
+                    },
                   },
-                  '&:hover:not(.Mui-disabled):before': {
-                    borderBottom: '2px solid',
-                    borderColor: 'primary.main',
-                  },
-                  '&:after': {
-                    borderBottom: '2px solid',
-                    borderColor: 'primary.main',
-                  },
-                },
-                '& .MuiInput-input': {
-                  padding: isMobile ? '6px 0' : '8px 0',
-                },
-              }}
-            />
+                }}
+              />
+            )}
+            
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5, flexWrap: 'wrap', gap: 0.5 }}>
-              {userEmail ? (
-                <Typography variant="caption" color="text.secondary">
-                  Posting as: {isAnonymous ? 'Anonymous' : userName || 'User'}
-                </Typography>
-              ) : (
-                <Typography variant="caption" color="text.secondary">
-                  Click the text box to add your details
-                </Typography>
-              )}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                {userEmail ? (
+                  <Typography variant="caption" color="text.secondary">
+                    Posting as: {isAnonymous ? 'Anonymous' : userName || 'User'}
+                  </Typography>
+                ) : (
+                  <Typography variant="caption" color="text.secondary">
+                    Click the text box to add your details
+                  </Typography>
+                )}
+                {newComment && newComment !== '<p><br></p>' && (
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>
+                    • {newComment.replace(/<[^>]*>/g, '').length} characters
+                  </Typography>
+                )}
+              </Box>
               <Button
-                variant="text"
-                size="small"
                 onClick={handleAddComment}
-                disabled={isSubmitting || !newComment.trim() || !userEmail}
-                startIcon={isSubmitting ? <CircularProgress size={16} /> : <Send sx={{ fontSize: 16 }} />}
+                disabled={isSubmitting || !newComment.trim() || newComment === '<p><br></p>' || !userEmail}
+                startIcon={isSubmitting ? <CircularProgress size={16} color="inherit" /> : <Send sx={{ fontSize: 16 }} />}
                 sx={{ 
                   borderRadius: 2, 
                   textTransform: 'none', 
                   fontWeight: 600,
-                  color: 'primary.main',
-                  px: 1.5,
-                  py: 0.5,
+                  px: 3,
+                  py: 0.75,
                   minWidth: 'auto',
-                  fontSize: '0.75rem',
+                  fontSize: '0.8125rem',
+                  background: isDark 
+                    ? 'linear-gradient(135deg, rgba(144, 202, 249, 0.2), rgba(144, 202, 249, 0.05))'
+                    : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  color: isDark ? '#90caf9' : '#fff',
+                  border: '1px solid',
+                  borderColor: isDark ? 'rgba(144, 202, 249, 0.2)' : 'transparent',
+                  boxShadow: isDark 
+                    ? 'none'
+                    : '0 4px 20px rgba(102, 126, 234, 0.3)',
+                  transition: 'all 0.3s ease',
                   '&:hover': {
-                    backgroundColor: 'rgba(25, 118, 210, 0.04)',
+                    background: isDark 
+                      ? 'linear-gradient(135deg, rgba(144, 202, 249, 0.3), rgba(144, 202, 249, 0.1))'
+                      : 'linear-gradient(135deg, #5a6fd6 0%, #6a3f9a 100%)',
+                    boxShadow: isDark 
+                      ? '0 0 30px rgba(144, 202, 249, 0.1)'
+                      : '0 6px 30px rgba(102, 126, 234, 0.4)',
+                    transform: 'translateY(-2px)',
+                  },
+                  '&:active': {
+                    transform: 'scale(0.97)',
+                  },
+                  '&:disabled': {
+                    background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+                    color: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)',
+                    boxShadow: 'none',
+                    transform: 'none',
+                    borderColor: 'transparent',
                   },
                 }}
               >
-                Post
+                {isSubmitting ? 'Sending...' : 'Post'}
               </Button>
             </Box>
           </Box>
         </Box>
 
-        <Divider sx={{ my: isMobile ? 1.5 : 2 }} />
+        <Divider sx={{ 
+          my: isMobile ? 1.5 : 2,
+          borderColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
+        }} />
 
         {comments.length === 0 ? (
-          <Box sx={{ textAlign: 'center', py: isMobile ? 3 : 4, bgcolor: 'action.hover', borderRadius: 2 }}>
+          <Box sx={{ 
+            textAlign: 'center', 
+            py: isMobile ? 3 : 4, 
+            backgroundColor: 'transparent', 
+            borderRadius: 2,
+          }}>
             <Typography variant="body2" color="text.secondary">
               No comments yet. Start the conversation!
             </Typography>
@@ -932,7 +1306,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
         )}
       </Box>
 
-      {/* User Dialog - Updated with onUpdate prop */}
+      {/* User Dialog */}
       <CommentDialog
         open={dialogOpen}
         onClose={() => {
