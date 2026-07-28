@@ -11,17 +11,6 @@
 [Live Demo](https://ai-humanizer.vercel.app) · [Report Bug](https://github.com/yourusername/ai-humanizer/issues) · [Request Feature](https://github.com/yourusername/ai-humanizer/issues)
 
 ---
-
-## 📸 Screenshots
-
-| Light Mode | Dark Mode |
-|------------|-----------|
-| ![Light Mode](screenshots/light-mode.png) | ![Dark Mode](screenshots/dark-mode.png) |
-
-| Editor | Results |
-|--------|---------|
-| ![Editor](screenshots/editor.png) | ![Results](screenshots/results.png) |
-
 ---
 
 ## ✨ Features
