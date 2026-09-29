@@ -1,3 +1,5 @@
+// src/services/aiService.ts
+
 import { HumanizeRequest, HumanizeResponse } from '../types';
 import { 
   allReplacements, 
@@ -101,6 +103,72 @@ const applyGrammarAPICorrections = (text: string, matches: GrammarMatch[]): stri
   return result;
 };
 
+// ============ PROPER NOUN DETECTION ============
+// Words that should NEVER be replaced (names, places, brands, technical terms)
+const PROTECTED_WORDS = new Set([
+  // Common names
+  'amila', 'sandaruwan', 'john', 'jane', 'smith', 'david', 'sarah', 'michael',
+  'james', 'robert', 'william', 'mary', 'patricia', 'jennifer', 'linda',
+  'elizabeth', 'barbara', 'susan', 'jessica', 'karen', 'nancy', 'lisa',
+  'margaret', 'sandra', 'ashley', 'kimberly', 'emily', 'donna', 'michelle',
+  // Countries and cities
+  'america', 'american', 'england', 'english', 'france', 'french', 'germany',
+  'german', 'italy', 'italian', 'spain', 'spanish', 'china', 'chinese',
+  'japan', 'japanese', 'india', 'indian', 'korea', 'korean', 'russia',
+  'russian', 'brazil', 'brazilian', 'canada', 'canadian', 'australia',
+  'australian', 'london', 'paris', 'tokyo', 'beijing', 'delhi', 'moscow',
+  'colombo', 'sri', 'lanka', 'singapore', 'dubai', 'newyork', 'york',
+  'california', 'texas', 'florida', 'washington', 'boston', 'chicago',
+  // Brands and companies
+  'google', 'microsoft', 'apple', 'amazon', 'facebook', 'twitter', 'instagram',
+  'youtube', 'netflix', 'spotify', 'uber', 'lyft', 'airbnb', 'tesla',
+  'samsung', 'sony', 'intel', 'nvidia', 'oracle', 'adobe', 'ibm',
+  // Technology
+  'react', 'angular', 'vue', 'javascript', 'typescript', 'python', 'java',
+  'ruby', 'php', 'swift', 'kotlin', 'golang', 'rust', 'html', 'css', 'sql',
+  'mongodb', 'postgresql', 'mysql', 'redis', 'docker', 'kubernetes',
+  'linux', 'windows', 'macos', 'android', 'ios', 'ubuntu', 'debian',
+  'nodejs', 'node', 'npm', 'yarn', 'webpack', 'babel', 'jest', 'cypress',
+  'github', 'gitlab', 'bitbucket', 'vercel', 'netlify', 'heroku', 'aws',
+  'azure', 'gcp', 'firebase', 'supabase', 'openai', 'gemini', 'claude',
+  // Common proper nouns
+  'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+  'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august',
+  'september', 'october', 'november', 'december',
+]);
+
+// Check if a word is likely a proper noun (starts with capital letter in original)
+const isProperNoun = (originalWord: string, cleanWord: string): boolean => {
+  // Check if the word is in the protected list
+  if (PROTECTED_WORDS.has(cleanWord.toLowerCase())) {
+    return true;
+  }
+  
+  // Check if the original word starts with a capital letter
+  // (but not at the start of a sentence - that's normal capitalization)
+  const wordWithoutPunctuation = originalWord.replace(/^[^a-zA-Z]*/, '').replace(/[^a-zA-Z]*$/, '');
+  
+  if (wordWithoutPunctuation.length === 0) return false;
+  
+  // If word starts with capital AND is not the first word of the sentence,
+  // it's likely a proper noun
+  const startsWithCapital = /^[A-Z]/.test(wordWithoutPunctuation);
+  
+  return startsWithCapital;
+};
+
+// Check if a word is an acronym or abbreviation
+const isAcronym = (word: string): boolean => {
+  const clean = word.replace(/[^a-zA-Z]/g, '');
+  // All uppercase and length >= 2 (e.g., "AI", "API", "USA")
+  return clean.length >= 2 && clean === clean.toUpperCase();
+};
+
+// Check if a word contains numbers (likely not a common word)
+const containsNumbers = (word: string): boolean => {
+  return /\d/.test(word);
+};
+
 // ============ NATURAL LANGUAGE TRANSFORMATIONS ============
 
 // 1. Remove AI Transition Words
@@ -186,8 +254,6 @@ const cutFiller = (text: string): string => {
 
 // 4. Mix Sentence Lengths - MODIFIED to preserve paragraph structure
 const mixSentenceLengths = (text: string): string => {
-  // Only apply within a single paragraph (no paragraph breaks)
-  // Skip if text has structural markers
   if (/^#{1,6}\s/.test(text) || /^[•·▪◦●■□*\-+]/.test(text)) {
     return text;
   }
@@ -229,7 +295,6 @@ const mixSentenceLengths = (text: string): string => {
 
 // 5. Vary Sentence Starters - MODIFIED to preserve paragraph structure
 const varySentenceStarters = (text: string): string => {
-  // Skip if text has structural markers
   if (/^#{1,6}\s/.test(text) || /^[•·▪◦●■□*\-+]/.test(text)) {
     return text;
   }
@@ -320,14 +385,11 @@ const makeMoreSpecific = (text: string): string => {
   return result;
 };
 
-// ============ PRESERVE STRUCTURE HELPER - ENHANCED ============
-// This function preserves paragraphs, line breaks, bullet points, headings, etc.
+// ============ PRESERVE STRUCTURE HELPER ============
 const preserveStructure = (text: string, humanizeFn: (line: string) => string): string => {
-  // Split by paragraphs (double newline)
   const paragraphs = text.split(/\n\s*\n/);
   
   const processedParagraphs = paragraphs.map(paragraph => {
-    // Split by lines within paragraph
     const lines = paragraph.split(/\n/);
     
     const processedLines = lines.map(line => {
@@ -335,7 +397,7 @@ const preserveStructure = (text: string, humanizeFn: (line: string) => string): 
       const trailingWhitespace = line.match(/\s*$/)?.[0] || '';
       const content = line.trim();
       
-      if (!content) return line; // Keep empty lines
+      if (!content) return line;
       
       // Check for bullet points or numbered lists
       const bulletMatch = content.match(/^([•·▪◦●■□*\-+]|\d+[.)]|[a-zA-Z][.)])(\s+)/);
@@ -389,27 +451,88 @@ const preserveStructure = (text: string, humanizeFn: (line: string) => string): 
     return processedLines.join('\n');
   });
   
-  // Join paragraphs with double newline to preserve paragraph breaks
   return processedParagraphs.join('\n\n');
 };
 
-// ============ WORD REPLACEMENT HELPER ============
+// ============ WORD REPLACEMENT HELPER - STRICT MODE ============
+// This function ONLY replaces words that have a replacement in the dictionary.
+// Words WITHOUT a replacement stay EXACTLY as they are.
+// Proper nouns (names, places, brands) are NEVER replaced.
 const replaceWordsInLine = (line: string, rate: number): string => {
   const words = line.split(/\s+/);
   
   for (let i = 0; i < words.length; i++) {
-    const cleanWord = words[i].toLowerCase().replace(/[^a-z]/g, '');
-    // Skip words that are part of structure
+    const originalWord = words[i];
+    const cleanWord = originalWord.toLowerCase().replace(/[^a-z]/g, '');
+    
+    // Skip empty words
+    if (!cleanWord) continue;
+    
+    // Skip words that are part of structure (headings, bullets)
     if (i === 0 && (line.trim().startsWith('#') || /^[•·▪◦●■□*\-+]|\d+[.)]|[a-zA-Z][.)]/.test(cleanWord))) {
       continue;
     }
-    if (Math.random() < rate && hasReplacement(cleanWord)) {
-      const replacement = getRandomReplacement(cleanWord);
-      if (replacement) {
-        const punctuation = words[i].match(/[^a-zA-Z]/g) || [];
-        words[i] = replacement + (punctuation.join('') || '');
-      }
+    
+    // ============ PROTECTED WORD CHECKS ============
+    
+    // Check 1: Is this a protected word (name, place, brand)?
+    if (PROTECTED_WORDS.has(cleanWord)) {
+      continue;
     }
+    
+    // Check 2: Is this a proper noun (starts with capital, not first word)?
+    if (i > 0 && isProperNoun(originalWord, cleanWord)) {
+      continue;
+    }
+    
+    // Check 3: Is this an acronym (all caps)?
+    if (isAcronym(originalWord)) {
+      continue;
+    }
+    
+    // Check 4: Does this contain numbers?
+    if (containsNumbers(originalWord)) {
+      continue;
+    }
+    
+    // Check 5: Is this word in the dictionary?
+    if (!hasReplacement(cleanWord)) {
+      // NO replacement available - keep the word EXACTLY as it is
+      continue;
+    }
+    
+    // Random chance based on rate
+    if (Math.random() >= rate) {
+      // Rate didn't trigger - keep original
+      continue;
+    }
+    
+    // Get a replacement
+    const replacement = getRandomReplacement(cleanWord);
+    
+    if (!replacement) {
+      // No replacement found - keep original
+      continue;
+    }
+    
+    // ============ PRESERVE PUNCTUATION AND CAPITALIZATION ============
+    
+    // Preserve punctuation from the original word
+    const punctuationPrefix = originalWord.match(/^[^a-zA-Z]*/)?.[0] || '';
+    const punctuationSuffix = originalWord.match(/[^a-zA-Z]*$/)?.[0] || '';
+    
+    // Check if original was capitalized
+    const wordWithoutPunctuation = originalWord.replace(/^[^a-zA-Z]*/, '').replace(/[^a-zA-Z]*$/, '');
+    const isCapitalized = /^[A-Z]/.test(wordWithoutPunctuation);
+    
+    // Apply capitalization to replacement if needed
+    let finalReplacement = replacement;
+    if (isCapitalized && replacement.length > 0) {
+      finalReplacement = replacement.charAt(0).toUpperCase() + replacement.slice(1);
+    }
+    
+    // Reconstruct word with punctuation
+    words[i] = punctuationPrefix + finalReplacement + punctuationSuffix;
   }
   
   return words.join(' ');
@@ -458,7 +581,6 @@ const applyMediumHumanization = (text: string): string => {
 
 // ============ HEAVY RESTRUCTURING FUNCTIONS ============
 const restructureSentenceHeavy = (sentence: string): string => {
-  // Skip if it's a heading or bullet
   if (/^#{1,6}\s/.test(sentence) || /^[•·▪◦●■□*\-+]/.test(sentence)) {
     return sentence;
   }
@@ -502,7 +624,6 @@ const restructureSentenceHeavy = (sentence: string): string => {
 };
 
 const changeVoiceHeavy = (sentence: string): string => {
-  // Skip if it's a heading or bullet
   if (/^#{1,6}\s/.test(sentence) || /^[•·▪◦●■□*\-+]/.test(sentence)) {
     return sentence;
   }
@@ -548,7 +669,6 @@ const applyHeavyHumanization = (text: string): string => {
     
     let result = replaceWordsInLine(line, 0.98);
     
-    // Apply all natural language transformations
     result = removeAITransitions(result);
     result = simplifyVerbs(result);
     result = cutFiller(result);
@@ -622,10 +742,8 @@ export const humanizeText = async (
       humanized = text;
   }
   
-  // Apply internal grammar corrections
   humanized = applyGrammarCorrections(humanized);
   
-  // Apply LanguageTool API Grammar Check
   try {
     const language = tone === 'casual' ? 'en-US' : 'en-US';
     const grammarResult = await checkGrammarWithLanguageTool(humanized, language);
