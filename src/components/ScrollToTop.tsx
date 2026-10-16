@@ -1,7 +1,7 @@
 // src/components/ScrollToTop.tsx
 
-import React, { useState, useEffect } from 'react';
-import { Fab, Zoom, useTheme } from '@mui/material';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import { Fab, Zoom, useTheme, useMediaQuery } from '@mui/material';
 import { KeyboardArrowUp } from '@mui/icons-material';
 
 interface ScrollToTopProps {
@@ -12,60 +12,57 @@ const ScrollToTop: React.FC<ScrollToTopProps> = ({ threshold = 300 }) => {
   const [visible, setVisible] = useState(false);
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const tickingRef = useRef(false);
 
   useEffect(() => {
     const handleScroll = () => {
-      const scrolled = document.documentElement.scrollTop;
-      setVisible(scrolled > threshold);
+      if (tickingRef.current) return;
+      tickingRef.current = true;
+      requestAnimationFrame(() => {
+        setVisible(window.scrollY > threshold);
+        tickingRef.current = false;
+      });
     };
 
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, [threshold]);
 
-  const scrollToTop = () => {
-    window.scrollTo({
-      top: 0,
-      behavior: 'smooth',
-    });
-  };
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 
   return (
     <Zoom in={visible}>
       <Fab
         onClick={scrollToTop}
-        size="medium"
+        size={isMobile ? 'small' : 'medium'}
         aria-label="Scroll to top"
         sx={{
           position: 'fixed',
-          bottom: 32,
-          right: 32,
+          bottom: isMobile
+            ? 'calc(16px + env(safe-area-inset-bottom))'
+            : 32,
+          right: isMobile ? 16 : 32,
           zIndex: 1000,
-          backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+          backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(91,111,214,0.9)',
           backdropFilter: 'blur(10px)',
           border: '1px solid',
-          borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
-          color: 'text.primary',
-          boxShadow: isDark 
-            ? '0 4px 20px rgba(0,0,0,0.3)' 
-            : '0 4px 20px rgba(0,0,0,0.08)',
-          transition: 'all 0.3s ease',
+          borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(91,111,214,0.4)',
+          color: isDark ? '#ececf6' : '#ffffff',
+          boxShadow: 'none',
+          width: isMobile ? 44 : 56,
+          height: isMobile ? 44 : 56,
           '&:hover': {
-            backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)',
-            transform: 'translateY(-2px)',
-            boxShadow: isDark 
-              ? '0 8px 32px rgba(0,0,0,0.4)' 
-              : '0 8px 32px rgba(0,0,0,0.12)',
-          },
-          '&:active': {
-            transform: 'scale(0.95)',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(91,111,214,1)',
           },
         }}
       >
-        <KeyboardArrowUp sx={{ fontSize: 28 }} />
+        <KeyboardArrowUp sx={{ fontSize: isMobile ? 22 : 28 }} />
       </Fab>
     </Zoom>
   );
 };
 
-export default ScrollToTop;
+export default memo(ScrollToTop);

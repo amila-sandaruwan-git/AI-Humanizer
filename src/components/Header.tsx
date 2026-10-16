@@ -1,7 +1,6 @@
 // src/components/Header.tsx
-// REPLACE — styling only. Props, handlers, state, context, and click behaviour are identical to your original.
 
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, memo } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -47,31 +46,27 @@ const Header: React.FC<HeaderProps> = ({ onAboutClick, onHelpClick, onFeedbackCl
     setMobileMenuAnchor(event.currentTarget);
   };
 
-  const handleMobileMenuClose = () => {
-    setMobileMenuAnchor(null);
-  };
+  const handleMobileMenuClose = () => setMobileMenuAnchor(null);
 
   const handleAboutClick = () => {
     handleMobileMenuClose();
-    if (onAboutClick) onAboutClick();
+    onAboutClick?.();
   };
 
   const handleHelpClick = () => {
     handleMobileMenuClose();
-    if (onHelpClick) onHelpClick();
+    onHelpClick?.();
   };
 
   const handleFeedbackClick = () => {
     handleMobileMenuClose();
-    if (onFeedbackClick) onFeedbackClick();
+    onFeedbackClick?.();
   };
 
-  // ---- shared style tokens (design only) ----
-  const textMuted = isDark ? 'rgba(236,236,246,0.68)' : 'rgba(24,24,48,0.68)';
-  const textStrong = isDark ? '#ffffff' : '#181830';
-  const hoverBg = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(102,126,234,0.09)';
-  const chipBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(24,24,48,0.045)';
-  const chipBgHover = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(102,126,234,0.14)';
+  const textMuted = isDark ? 'rgba(236,236,246,0.68)' : 'rgba(43,47,69,0.68)';
+  const textStrong = isDark ? '#ffffff' : '#2b2f45';
+  const hoverBg = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(91,111,214,0.08)';
+  const chipBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(43,47,69,0.05)';
 
   const navButtonSx = {
     fontFamily: 'Inter, sans-serif',
@@ -81,26 +76,13 @@ const Header: React.FC<HeaderProps> = ({ onAboutClick, onHelpClick, onFeedbackCl
     py: 0.9,
     borderRadius: '999px',
     color: textMuted,
-    position: 'relative' as const,
-    transition: 'background-color .2s ease, color .2s ease',
-    '& .MuiButton-startIcon': { mr: 0.75, transition: 'color .2s ease' },
+    textTransform: 'none' as const,
+    transition: 'background-color 0.15s ease, color 0.15s ease',
     '&:hover': {
       backgroundColor: hoverBg,
       color: textStrong,
-      transform: 'none',
-      boxShadow: 'none',
-      '& .MuiButton-startIcon': { color: '#667eea' },
     },
   };
-
-  const iconButtonSx = (size: number) => ({
-    borderRadius: '12px',
-    width: size,
-    height: size,
-    backgroundColor: chipBg,
-    transition: 'background-color .2s ease, transform .2s ease',
-    '&:hover': { backgroundColor: chipBgHover, transform: 'rotate(12deg)' },
-  });
 
   return (
     <AppBar
@@ -108,51 +90,36 @@ const Header: React.FC<HeaderProps> = ({ onAboutClick, onHelpClick, onFeedbackCl
       color="transparent"
       elevation={0}
       sx={{
-        backdropFilter: 'saturate(160%) blur(18px)',
-        WebkitBackdropFilter: 'saturate(160%) blur(18px)',
-        backgroundColor: isDark ? 'rgba(11, 11, 22, 0.72)' : 'rgba(255, 255, 255, 0.74)',
-        borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(24,24,48,0.07)'}`,
-        boxShadow: isDark ? '0 8px 32px rgba(0, 0, 0, 0.35)' : '0 8px 32px rgba(24, 24, 48, 0.06)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        backgroundColor: isDark ? 'rgba(11, 11, 22, 0.78)' : 'rgba(247, 248, 252, 0.88)',
+        borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(43,47,69,0.08)'}`,
         zIndex: (theme) => theme.zIndex.drawer + 1,
-        // thin brand hairline along the bottom edge
-        '&::after': {
-          content: '""',
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: -1,
-          height: '1px',
-          background:
-            'linear-gradient(90deg, transparent 0%, rgba(102,126,234,0.55) 30%, rgba(118,75,162,0.55) 70%, transparent 100%)',
-          pointerEvents: 'none',
-        },
       }}
     >
-      <Container maxWidth="lg">
-        <Toolbar disableGutters sx={{ py: 0.5, minHeight: { xs: 64, sm: 72 } }}>
-          {/* Brand: logo mark + wordmark */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexShrink: 0 }}>
+      <Container maxWidth="lg" sx={{ px: { xs: 1.5, sm: 2, md: 3 } }}>
+        <Toolbar disableGutters sx={{ py: 0.5, minHeight: { xs: 56, sm: 64, md: 72 } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 1.25 }, flexShrink: 0 }}>
             <Box
               sx={{
-                width: { xs: 34, sm: 40 },
-                height: { xs: 34, sm: 40 },
+                width: { xs: 32, sm: 36, md: 40 },
+                height: { xs: 32, sm: 36, md: 40 },
                 borderRadius: '12px',
                 background: BRAND_GRADIENT,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 6px 18px rgba(102,126,234,0.38)',
                 flexShrink: 0,
               }}
             >
-              <AutoAwesome sx={{ fontSize: { xs: 18, sm: 21 }, color: '#fff' }} />
+              <AutoAwesome sx={{ fontSize: { xs: 16, sm: 18, md: 21 }, color: '#fff' }} />
             </Box>
-            <Box>
+            <Box sx={{ minWidth: 0 }}>
               <Typography
                 variant="h6"
                 sx={{
                   fontWeight: 800,
-                  fontSize: { xs: '1rem', sm: '1.2rem' },
+                  fontSize: { xs: '0.9375rem', sm: '1.05rem', md: '1.2rem' },
                   fontFamily: 'Inter, sans-serif',
                   letterSpacing: '-0.03em',
                   lineHeight: 1.15,
@@ -170,7 +137,7 @@ const Header: React.FC<HeaderProps> = ({ onAboutClick, onHelpClick, onFeedbackCl
                   display: { xs: 'none', sm: 'block' },
                   fontSize: '0.6rem',
                   fontWeight: 600,
-                  color: isDark ? 'rgba(255,255,255,0.42)' : 'rgba(24,24,48,0.45)',
+                  color: isDark ? 'rgba(255,255,255,0.42)' : 'rgba(43,47,69,0.5)',
                   letterSpacing: '0.12em',
                   textTransform: 'uppercase',
                   fontFamily: 'Inter, sans-serif',
@@ -184,7 +151,6 @@ const Header: React.FC<HeaderProps> = ({ onAboutClick, onHelpClick, onFeedbackCl
 
           {!isMobile ? (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 'auto' }}>
-              {/* Pill-shaped nav group */}
               <Box
                 sx={{
                   display: 'flex',
@@ -193,7 +159,9 @@ const Header: React.FC<HeaderProps> = ({ onAboutClick, onHelpClick, onFeedbackCl
                   p: 0.5,
                   borderRadius: '999px',
                   backgroundColor: chipBg,
-                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(24,24,48,0.05)'}`,
+                  border: `1px solid ${
+                    isDark ? 'rgba(255,255,255,0.06)' : 'rgba(43,47,69,0.06)'
+                  }`,
                 }}
               >
                 <Button
@@ -204,7 +172,6 @@ const Header: React.FC<HeaderProps> = ({ onAboutClick, onHelpClick, onFeedbackCl
                 >
                   About
                 </Button>
-
                 <Button
                   color="inherit"
                   onClick={onHelpClick}
@@ -213,7 +180,6 @@ const Header: React.FC<HeaderProps> = ({ onAboutClick, onHelpClick, onFeedbackCl
                 >
                   Help
                 </Button>
-
                 <Button
                   color="inherit"
                   onClick={onFeedbackClick}
@@ -227,26 +193,56 @@ const Header: React.FC<HeaderProps> = ({ onAboutClick, onHelpClick, onFeedbackCl
               <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1, opacity: 0.35 }} />
 
               <Tooltip title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
-                <IconButton onClick={colorMode?.toggleColorMode} sx={iconButtonSx(40)}>
+                <IconButton
+                  onClick={colorMode?.toggleColorMode}
+                  sx={{
+                    borderRadius: '12px',
+                    width: 40,
+                    height: 40,
+                    backgroundColor: chipBg,
+                    '&:hover': { backgroundColor: hoverBg },
+                  }}
+                  aria-label="Toggle theme"
+                >
                   {isDark ? (
                     <Brightness7 sx={{ fontSize: 20, color: '#fbbf24' }} />
                   ) : (
-                    <Brightness4 sx={{ fontSize: 20, color: '#6366f1' }} />
+                    <Brightness4 sx={{ fontSize: 20, color: '#5b6fd6' }} />
                   )}
                 </IconButton>
               </Tooltip>
             </Box>
           ) : (
-            <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1 }}>
-              <IconButton onClick={colorMode?.toggleColorMode} size="small" sx={iconButtonSx(38)}>
+            <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <IconButton
+                onClick={colorMode?.toggleColorMode}
+                size="small"
+                sx={{
+                  borderRadius: '12px',
+                  width: 40,
+                  height: 40,
+                  backgroundColor: chipBg,
+                }}
+                aria-label="Toggle theme"
+              >
                 {isDark ? (
                   <Brightness7 sx={{ fontSize: 18, color: '#fbbf24' }} />
                 ) : (
-                  <Brightness4 sx={{ fontSize: 18, color: '#6366f1' }} />
+                  <Brightness4 sx={{ fontSize: 18, color: '#5b6fd6' }} />
                 )}
               </IconButton>
 
-              <IconButton onClick={handleMobileMenuOpen} size="small" sx={iconButtonSx(38)}>
+              <IconButton
+                onClick={handleMobileMenuOpen}
+                size="small"
+                sx={{
+                  borderRadius: '12px',
+                  width: 40,
+                  height: 40,
+                  backgroundColor: chipBg,
+                }}
+                aria-label="Open menu"
+              >
                 <MenuIcon />
               </IconButton>
 
@@ -262,25 +258,50 @@ const Header: React.FC<HeaderProps> = ({ onAboutClick, onHelpClick, onFeedbackCl
                       mt: 1,
                       p: 0.5,
                       borderRadius: '16px',
-                      minWidth: 210,
+                      minWidth: 220,
                       backgroundColor: isDark ? '#151526' : '#ffffff',
-                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(24,24,48,0.07)'}`,
-                      boxShadow: '0 24px 64px rgba(0,0,0,0.22)',
+                      border: `1px solid ${
+                        isDark ? 'rgba(255,255,255,0.08)' : 'rgba(43,47,69,0.08)'
+                      }`,
+                      boxShadow: isDark
+                        ? '0 16px 48px rgba(0,0,0,0.4)'
+                        : '0 16px 48px rgba(43,47,69,0.12)',
                     },
                   },
                 }}
               >
-                <MenuItem onClick={handleAboutClick} sx={{ py: 1.25, px: 1.75, borderRadius: '10px' }}>
+                <MenuItem
+                  onClick={handleAboutClick}
+                  sx={{ py: 1.5, px: 1.75, borderRadius: '10px', minHeight: 48 }}
+                >
                   <Info sx={{ mr: 1.5, fontSize: 20, color: '#667eea' }} />
-                  <Typography sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 500 }}>About</Typography>
+                  <Typography
+                    sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: '0.9375rem' }}
+                  >
+                    About
+                  </Typography>
                 </MenuItem>
-                <MenuItem onClick={handleHelpClick} sx={{ py: 1.25, px: 1.75, borderRadius: '10px' }}>
+                <MenuItem
+                  onClick={handleHelpClick}
+                  sx={{ py: 1.5, px: 1.75, borderRadius: '10px', minHeight: 48 }}
+                >
                   <Help sx={{ mr: 1.5, fontSize: 20, color: '#667eea' }} />
-                  <Typography sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 500 }}>Help</Typography>
+                  <Typography
+                    sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: '0.9375rem' }}
+                  >
+                    Help
+                  </Typography>
                 </MenuItem>
-                <MenuItem onClick={handleFeedbackClick} sx={{ py: 1.25, px: 1.75, borderRadius: '10px' }}>
+                <MenuItem
+                  onClick={handleFeedbackClick}
+                  sx={{ py: 1.5, px: 1.75, borderRadius: '10px', minHeight: 48 }}
+                >
                   <Comment sx={{ mr: 1.5, fontSize: 20, color: '#667eea' }} />
-                  <Typography sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 500 }}>Feedback</Typography>
+                  <Typography
+                    sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: '0.9375rem' }}
+                  >
+                    Feedback
+                  </Typography>
                 </MenuItem>
               </Menu>
             </Box>
@@ -291,4 +312,4 @@ const Header: React.FC<HeaderProps> = ({ onAboutClick, onHelpClick, onFeedbackCl
   );
 };
 
-export default Header;
+export default memo(Header);

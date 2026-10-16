@@ -1,6 +1,6 @@
 // src/components/ResultDisplay.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo, memo } from 'react';
 import {
   Box,
   Paper,
@@ -14,7 +14,7 @@ import {
   Divider,
   useTheme,
   LinearProgress,
-  alpha,
+  Stack,
 } from '@mui/material';
 import {
   ContentCopy,
@@ -36,20 +36,19 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, onCopy }) => {
   const isDark = theme.palette.mode === 'dark';
   const { showSuccess, showError, showInfo } = useToast();
 
-  const handleCopy = async () => {
+  const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(result.humanized);
       setCopied(true);
-      showSuccess('Copied to clipboard! 📋');
+      showSuccess('Copied to clipboard');
       setTimeout(() => setCopied(false), 2000);
-      if (onCopy) onCopy();
-    } catch (err) {
-      console.error('Failed to copy:', err);
+      onCopy?.();
+    } catch {
       showError('Failed to copy text');
     }
-  };
+  }, [result.humanized, showSuccess, showError, onCopy]);
 
-  const handleDownload = () => {
+  const handleDownload = useCallback(() => {
     try {
       const blob = new Blob([result.humanized], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
@@ -58,119 +57,94 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, onCopy }) => {
       a.download = 'humanized_text.txt';
       a.click();
       URL.revokeObjectURL(url);
-      showSuccess('File downloaded successfully! 📥');
-    } catch (err) {
+      showSuccess('File downloaded');
+    } catch {
       showError('Failed to download file');
     }
-  };
+  }, [result.humanized, showSuccess, showError]);
 
-  const handleShare = async () => {
+  const handleShare = useCallback(async () => {
     try {
       if (navigator.share) {
-        await navigator.share({
-          title: 'Humanized Text',
-          text: result.humanized,
-        });
-        showSuccess('Shared successfully!');
+        await navigator.share({ title: 'Humanized Text', text: result.humanized });
+        showSuccess('Shared successfully');
       } else {
         await navigator.clipboard.writeText(result.humanized);
-        showInfo('Text copied to clipboard! You can share it now.');
+        showInfo('Text copied to clipboard');
       }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         showError('Failed to share');
       }
     }
-  };
+  }, [result.humanized, showSuccess, showError, showInfo]);
 
-  const calculateSimilarity = () => {
-    const originalWords = result.original.toLowerCase().split(' ');
-    const humanizedWords = result.humanized.toLowerCase().split(' ');
-    const originalSet = new Set(originalWords);
-    const humanizedSet = new Set(humanizedWords);
-    
-    const intersection = new Set(
-      Array.from(originalSet).filter(word => humanizedSet.has(word))
-    );
-    return Math.round((intersection.size / originalSet.size) * 100);
-  };
+  const similarityScore = useMemo(() => {
+    const orig = result.original.toLowerCase().split(' ');
+    const hum = result.humanized.toLowerCase().split(' ');
+    const origSet = new Set(orig);
+    const humSet = new Set(hum);
+    let intersection = 0;
+    origSet.forEach((w) => {
+      if (humSet.has(w)) intersection++;
+    });
+    return Math.round((intersection / origSet.size) * 100);
+  }, [result.original, result.humanized]);
 
-  const similarityScore = calculateSimilarity();
-
-  // Determine color based on similarity score
-  const getSimilarityColor = (score: number): { color: string; bg: string; label: string } => {
-    if (score >= 70) {
+  const similarityInfo = useMemo(() => {
+    if (similarityScore >= 70) {
       return {
-        color: '#ef4444',
-        bg: isDark ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.08)',
-        label: 'High Similarity'
-      };
-    } else if (score >= 50) {
-      return {
-        color: '#f59e0b',
-        bg: isDark ? 'rgba(245, 158, 11, 0.15)' : 'rgba(245, 158, 11, 0.08)',
-        label: 'Medium Similarity'
-      };
-    } else {
-      return {
-        color: '#22c55e',
-        bg: isDark ? 'rgba(34, 197, 94, 0.15)' : 'rgba(34, 197, 94, 0.08)',
-        label: 'Low Similarity'
+        color: '#d64a4a',
+        bg: isDark ? 'rgba(214, 74, 74, 0.15)' : 'rgba(214, 74, 74, 0.08)',
       };
     }
-  };
+    if (similarityScore >= 50) {
+      return {
+        color: '#d98700',
+        bg: isDark ? 'rgba(217, 135, 0, 0.15)' : 'rgba(217, 135, 0, 0.08)',
+      };
+    }
+    return {
+      color: '#2fa060',
+      bg: isDark ? 'rgba(47, 160, 96, 0.15)' : 'rgba(47, 160, 96, 0.08)',
+    };
+  }, [similarityScore, isDark]);
 
-  const similarityInfo = getSimilarityColor(similarityScore);
+  const formattedText = useMemo(() => {
+    if (!result.humanized) return null;
+    const paragraphs = result.humanized.split(/\n\s*\n/);
 
-  // Get progress color for LinearProgress
-  const getProgressColor = (score: number): string => {
-    if (score >= 70) return '#ef4444';
-    if (score >= 50) return '#f59e0b';
-    return '#22c55e';
-  };
-
-  // Format the text to preserve structure (paragraphs, line breaks, bullet points)
-  const formatText = (text: string): React.ReactNode => {
-    if (!text) return null;
-
-    // Split by paragraphs (double newline)
-    const paragraphs = text.split(/\n\s*\n/);
-    
     return paragraphs.map((paragraph, pIndex) => {
-      // Split by lines within paragraph
       const lines = paragraph.split(/\n/);
-      
-      // Check if it's a bullet list
-      const hasBullets = lines.some(line => /^[•·▪◦●■□*\-+]|\d+[.)]/.test(line.trim()));
-      
+
       return (
         <Box key={pIndex} sx={{ mb: pIndex < paragraphs.length - 1 ? 2 : 0 }}>
           {lines.map((line, lIndex) => {
             const trimmed = line.trim();
             if (!trimmed) return <br key={lIndex} />;
-            
-            // Check for bullet point
-            const bulletMatch = trimmed.match(/^(\s*)([•·▪◦●■□*\-+]|\d+[.)]|[a-zA-Z][.)])(\s+)/);
+
+            const bulletMatch = trimmed.match(
+              /^(\s*)([•·▪◦●■□*\-+]|\d+[.)]|[a-zA-Z][.)])(\s+)/
+            );
             if (bulletMatch) {
               const indent = bulletMatch[1] || '';
               const bullet = bulletMatch[2] || '';
-              const space = bulletMatch[3] || '';
               const content = trimmed.substring(bulletMatch[0].length);
-              
+
               return (
-                <Box 
-                  key={lIndex} 
-                  sx={{ 
-                    display: 'flex', 
-                    alignItems: 'flex-start', 
+                <Box
+                  key={lIndex}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
                     gap: 0.5,
                     pl: indent,
                     py: 0.25,
                   }}
                 >
-                  <Typography 
-                    component="span" 
-                    sx={{ 
+                  <Typography
+                    component="span"
+                    sx={{
                       color: 'text.primary',
                       fontWeight: 600,
                       minWidth: 20,
@@ -179,13 +153,15 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, onCopy }) => {
                   >
                     {bullet}
                   </Typography>
-                  <Typography 
-                    component="span" 
-                    sx={{ 
+                  <Typography
+                    component="span"
+                    sx={{
                       color: 'text.primary',
-                      fontSize: '0.9375rem',
+                      fontSize: { xs: '0.875rem', sm: '0.9375rem' },
                       lineHeight: 1.7,
                       flex: 1,
+                      minWidth: 0,
+                      wordBreak: 'break-word',
                     }}
                   >
                     {content}
@@ -193,44 +169,47 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, onCopy }) => {
                 </Box>
               );
             }
-            
-            // Check for heading (##, ###, etc.)
+
             const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)/);
             if (headingMatch) {
               const level = headingMatch[1].length;
               const content = headingMatch[2];
-              const fontSize = level === 1 ? '1.5rem' : level === 2 ? '1.25rem' : level === 3 ? '1.125rem' : '1rem';
+              const fontSize =
+                level === 1
+                  ? '1.35rem'
+                  : level === 2
+                  ? '1.15rem'
+                  : level === 3
+                  ? '1.05rem'
+                  : '0.9375rem';
               const fontWeight = level <= 3 ? 700 : 600;
-              
+
               return (
-                <Typography 
+                <Typography
                   key={lIndex}
-                  variant="body1"
-                  sx={{ 
-                    fontWeight: fontWeight,
-                    fontSize: fontSize,
+                  sx={{
+                    fontWeight,
+                    fontSize,
                     color: 'text.primary',
                     mt: lIndex > 0 ? 1.5 : 0,
                     mb: 0.5,
-                    fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
+                    wordBreak: 'break-word',
                   }}
                 >
                   {content}
                 </Typography>
               );
             }
-            
-            // Regular line
+
             return (
-              <Typography 
+              <Typography
                 key={lIndex}
-                variant="body2"
-                sx={{ 
+                sx={{
                   color: 'text.primary',
-                  fontSize: '0.9375rem',
+                  fontSize: { xs: '0.875rem', sm: '0.9375rem' },
                   lineHeight: 1.7,
                   py: 0.25,
-                  fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
+                  wordBreak: 'break-word',
                 }}
               >
                 {trimmed}
@@ -240,37 +219,56 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, onCopy }) => {
         </Box>
       );
     });
-  };
+  }, [result.humanized]);
 
   return (
-    <Box sx={{ mt: 4 }}>
-      <Paper 
-        elevation={0} 
-        sx={{ 
-          p: 3,
+    <Box sx={{ mt: { xs: 2.5, sm: 3, md: 4 } }}>
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 1.75, sm: 2.5, md: 3 },
           borderRadius: 3,
           border: '1px solid',
           borderColor: 'divider',
-          backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
+          backgroundColor: isDark
+            ? 'rgba(255,255,255,0.02)'
+            : 'rgba(255,255,255,0.7)',
         }}
       >
-        <Box 
-          sx={{ 
+        <Box
+          sx={{
             display: 'flex',
-            justifyContent: 'space-between', 
-            alignItems: 'center',
+            justifyContent: 'space-between',
+            alignItems: { xs: 'flex-start', sm: 'center' },
             mb: 2,
-            flexWrap: 'wrap',
-            gap: 1,
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: 1.5,
           }}
         >
-          <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary' }}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 700,
+              color: 'text.primary',
+              fontSize: { xs: '1rem', sm: '1.15rem' },
+            }}
+          >
             Humanized Result
           </Typography>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-            {/* Similarity Chip with Color */}
+
+          <Stack
+            direction="row"
+            spacing={0.5}
+            sx={{
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 0.5,
+              width: { xs: '100%', sm: 'auto' },
+              justifyContent: { xs: 'space-between', sm: 'flex-end' },
+            }}
+          >
             <Tooltip title={`${similarityScore}% similar to original text`}>
-              <Chip 
+              <Chip
                 label={`${similarityScore}% similar`}
                 size="small"
                 sx={{
@@ -278,46 +276,74 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, onCopy }) => {
                   color: similarityInfo.color,
                   fontWeight: 600,
                   border: `1px solid ${similarityInfo.color}40`,
-                  '& .MuiChip-label': {
-                    px: 1.5,
-                  },
+                  '& .MuiChip-label': { px: 1.5 },
+                  fontSize: '0.7rem',
+                  height: 26,
                 }}
               />
             </Tooltip>
-            
-            <Tooltip title={copied ? 'Copied!' : 'Copy to clipboard'}>
-              <IconButton onClick={handleCopy} color={copied ? 'success' : 'primary'} size="small">
-                {copied ? <CheckCircle /> : <ContentCopy />}
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Download as TXT">
-              <IconButton onClick={handleDownload} color="info" size="small">
-                <Download />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Share">
-              <IconButton onClick={handleShare} color="secondary" size="small">
-                <Share />
-              </IconButton>
-            </Tooltip>
-          </Box>
+
+            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+              <Tooltip title={copied ? 'Copied!' : 'Copy to clipboard'}>
+                <IconButton
+                  onClick={handleCopy}
+                  color={copied ? 'success' : 'primary'}
+                  size="small"
+                  aria-label="Copy"
+                  sx={{ width: 36, height: 36 }}
+                >
+                  {copied ? <CheckCircle /> : <ContentCopy />}
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Download as TXT">
+                <IconButton
+                  onClick={handleDownload}
+                  color="info"
+                  size="small"
+                  aria-label="Download"
+                  sx={{ width: 36, height: 36 }}
+                >
+                  <Download />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Share">
+                <IconButton
+                  onClick={handleShare}
+                  color="secondary"
+                  size="small"
+                  aria-label="Share"
+                  sx={{ width: 36, height: 36 }}
+                >
+                  <Share />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </Stack>
         </Box>
 
-        {/* Similarity Progress Bar */}
         <Box sx={{ mb: 2.5 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-            <Typography variant="caption" sx={{ 
-              color: 'text.secondary',
-              fontSize: '0.65rem',
-              fontWeight: 500,
-            }}>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              mb: 0.5,
+            }}
+          >
+            <Typography
+              variant="caption"
+              sx={{ color: 'text.secondary', fontSize: '0.65rem', fontWeight: 500 }}
+            >
               Similarity Score
             </Typography>
-            <Typography variant="caption" sx={{ 
-              color: similarityInfo.color,
-              fontWeight: 700,
-              fontSize: '0.7rem',
-            }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: similarityInfo.color,
+                fontWeight: 700,
+                fontSize: '0.7rem',
+              }}
+            >
               {similarityScore}%
             </Typography>
           </Box>
@@ -327,105 +353,116 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, onCopy }) => {
             sx={{
               height: 6,
               borderRadius: 3,
-              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+              backgroundColor: isDark
+                ? 'rgba(255,255,255,0.06)'
+                : 'rgba(43,47,69,0.08)',
               '& .MuiLinearProgress-bar': {
                 borderRadius: 3,
-                backgroundColor: getProgressColor(similarityScore),
-                transition: 'all 0.5s ease',
+                backgroundColor: similarityInfo.color,
               },
             }}
           />
-          <Box sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            mt: 0.25,
-          }}>
-            <Typography variant="caption" sx={{ 
-              color: 'text.secondary',
-              fontSize: '0.5rem',
-              opacity: 0.5,
-            }}>
-              Less Humanized
-            </Typography>
-            <Typography variant="caption" sx={{ 
-              color: 'text.secondary',
-              fontSize: '0.5rem',
-              opacity: 0.5,
-            }}>
-              More Humanized
-            </Typography>
-          </Box>
         </Box>
 
         <Divider sx={{ mb: 2 }} />
 
-        <Card 
-          variant="outlined" 
-          sx={{ 
-            borderColor: 'primary.main',
-            backgroundColor: 'transparent',
-          }}
+        <Card
+          variant="outlined"
+          sx={{ borderColor: 'primary.main', backgroundColor: 'transparent' }}
         >
-          <CardContent>
-            <Typography variant="subtitle2" color="primary" gutterBottom>
+          <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
+            <Typography
+              variant="subtitle2"
+              color="primary"
+              gutterBottom
+              sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}
+            >
               Humanized Text ({result.wordCount.humanized} words)
             </Typography>
-            <Box 
-              sx={{ 
-                maxHeight: 400, 
+            <Box
+              sx={{
+                maxHeight: { xs: 320, sm: 400 },
                 overflow: 'auto',
                 backgroundColor: 'transparent',
-                p: 2,
+                p: { xs: 1, sm: 1.5 },
                 borderRadius: 1,
-                whiteSpace: 'pre-wrap',
                 wordWrap: 'break-word',
                 color: 'text.primary',
-                fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
+                overscrollBehavior: 'contain',
+                WebkitOverflowScrolling: 'touch',
               }}
             >
-              {formatText(result.humanized)}
+              {formattedText}
             </Box>
           </CardContent>
         </Card>
 
         {result.changes && (
-          <Box sx={{ mt: 3, p: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', borderRadius: 2 }}>
-            <Typography variant="subtitle2" gutterBottom sx={{ color: 'text.primary' }}>
+          <Box
+            sx={{
+              mt: { xs: 2, sm: 3 },
+              p: { xs: 1.5, sm: 2 },
+              backgroundColor: isDark
+                ? 'rgba(255,255,255,0.04)'
+                : 'rgba(43,47,69,0.04)',
+              borderRadius: 2,
+            }}
+          >
+            <Typography
+              variant="subtitle2"
+              gutterBottom
+              sx={{ color: 'text.primary', fontSize: '0.8125rem' }}
+            >
               Changes Summary
             </Typography>
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <Chip 
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Chip
                 label={`${result.changes.sentencesRewritten} sentences rewritten`}
                 color="info"
                 size="small"
+                sx={{ fontSize: '0.7rem' }}
               />
-              <Chip 
+              <Chip
                 label={`${result.changes.wordsChanged} words changed`}
                 color="info"
                 size="small"
+                sx={{ fontSize: '0.7rem' }}
               />
-              <Chip 
-                label={`${result.wordCount.original} → ${result.wordCount.humanized} words`}
+              <Chip
+                label={`${result.wordCount.original} to ${result.wordCount.humanized} words`}
                 color="default"
                 size="small"
+                sx={{ fontSize: '0.7rem' }}
               />
             </Box>
           </Box>
         )}
 
-        <Alert 
-          severity="info" 
-          sx={{ 
-            mt: 2, 
+        <Alert
+          severity="info"
+          sx={{
+            mt: 2,
             borderRadius: 2,
-            backgroundColor: isDark ? 'rgba(102,126,234,0.1)' : 'rgba(102,126,234,0.04)',
+            backgroundColor: isDark
+              ? 'rgba(102,126,234,0.1)'
+              : 'rgba(91,111,214,0.06)',
             border: '1px solid',
-            borderColor: isDark ? 'rgba(102,126,234,0.2)' : 'rgba(102,126,234,0.15)',
-            '& .MuiAlert-icon': { color: '#667eea' },
+            borderColor: isDark
+              ? 'rgba(102,126,234,0.2)'
+              : 'rgba(91,111,214,0.15)',
+            '& .MuiAlert-icon': { color: '#5b6fd6' },
           }}
         >
-          <Typography variant="body2" sx={{ fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif', color: 'text.primary' }}>
-            Tip: For best results, review and personalize the humanized text to match your unique voice and style.
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.primary',
+              fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+              lineHeight: 1.6,
+            }}
+          >
+            Tip: For best results, review and personalize the humanized text to match
+            your unique voice and style.
           </Typography>
         </Alert>
       </Paper>
@@ -433,4 +470,4 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, onCopy }) => {
   );
 };
 
-export default ResultDisplay;
+export default memo(ResultDisplay);
