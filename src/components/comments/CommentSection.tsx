@@ -33,6 +33,8 @@ import {
   Delete,
   Send,
   Person,
+  KeyboardArrowDown,
+  KeyboardArrowUp,
 } from '@mui/icons-material';
 import { formatDistanceToNow } from 'date-fns';
 import { commentService } from '../../services/commentService';
@@ -47,59 +49,6 @@ interface CommentSectionProps {
   onCommentAdded?: () => void;
 }
 
-// Custom Tooltip component for editor buttons
-const EditorTooltip: React.FC<{
-  title: string;
-  children: React.ReactElement;
-  placement?: 'top' | 'bottom' | 'left' | 'right';
-}> = ({ title, children, placement = 'top' }) => {
-  return (
-    <Tooltip 
-      title={title} 
-      placement={placement}
-      arrow
-      enterDelay={300}
-      leaveDelay={100}
-      slotProps={{
-        tooltip: {
-          sx: {
-            backgroundColor: (theme) => theme.palette.mode === 'dark' ? '#3d3d3d' : '#333',
-            color: '#fff',
-            fontSize: '0.7rem',
-            padding: '6px 12px',
-            borderRadius: '6px',
-            maxWidth: '200px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-          },
-        },
-        arrow: {
-          sx: {
-            color: (theme) => theme.palette.mode === 'dark' ? '#3d3d3d' : '#333',
-          },
-        },
-      }}
-    >
-      {children}
-    </Tooltip>
-  );
-};
-
-// Quill modules with custom tooltips
-const getQuillModules = (isReply: boolean) => ({
-  toolbar: {
-    container: [
-      ['bold', 'italic', 'underline', 'strike'],
-      ['blockquote'],
-      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-      ['link'],
-      ['clean']
-    ],
-    handlers: {
-      // Custom handlers if needed
-    }
-  },
-});
-
 const quillFormats = [
   'header',
   'bold', 'italic', 'underline', 'strike',
@@ -108,7 +57,184 @@ const quillFormats = [
   'link',
 ];
 
-// Single Comment Component
+// ============================================================
+// Quill modules — minimal toolbar, essentials only
+// ============================================================
+const getQuillModules = (isMobile: boolean) => ({
+  toolbar: {
+    container: isMobile
+      ? [
+          ['bold', 'italic', 'underline'],
+          [{ list: 'ordered' }, { list: 'bullet' }],
+          ['link'],
+        ]
+      : [
+          ['bold', 'italic', 'underline', 'strike'],
+          [{ list: 'ordered' }, { list: 'bullet' }],
+          ['link'],
+        ],
+  },
+});
+
+// ============================================================
+// Quill styles — toolbar reserves its space (no layout shift)
+// ============================================================
+const getQuillStyles = (
+  isDark: boolean,
+  isMobile: boolean,
+  isFocused: boolean,
+  isReply: boolean
+) => {
+  // Fixed toolbar height — never changes, so no scroll jump
+  const toolbarHeight = isMobile ? 44 : 46;
+
+  return {
+    minHeight: isReply ? (isMobile ? '60px' : '80px') : isMobile ? '80px' : '110px',
+    maxHeight: isReply ? 260 : 420,
+    backgroundColor: 'transparent',
+    color: isDark ? '#e0e0e0' : '#2b2f45',
+    border: 'none',
+    borderRadius: '10px',
+
+    // ============ TOOLBAR ============
+    // Height NEVER changes — only visibility toggles.
+    // This prevents the page-scroll jump when focus changes.
+    '& .ql-toolbar.ql-snow': {
+      display: 'flex !important',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: isMobile ? '4px' : '6px',
+
+      // Always reserve this height so the layout doesn't shift
+      minHeight: `${toolbarHeight}px !important`,
+      height: `${toolbarHeight}px !important`,
+      maxHeight: `${toolbarHeight}px !important`,
+      boxSizing: 'border-box',
+
+      // Visibility toggle — no layout change
+      visibility: isFocused ? 'visible' : 'hidden',
+      opacity: isFocused ? 1 : 0,
+      pointerEvents: isFocused ? 'auto' : 'none',
+
+      // Smooth fade only (no height animation)
+      transition: 'opacity 0.18s ease',
+
+      border: 'none',
+      borderBottom: `1px solid ${
+        isDark ? 'rgba(255,255,255,0.08)' : 'rgba(43,47,69,0.08)'
+      } !important`,
+      padding: isMobile ? '4px 4px !important' : '6px 4px !important',
+      margin: '0 !important',
+    },
+
+    // Buttons
+    '& .ql-toolbar.ql-snow button': {
+      display: 'inline-flex !important',
+      alignItems: 'center !important',
+      justifyContent: 'center !important',
+      width: isMobile ? '34px !important' : '32px !important',
+      height: isMobile ? '34px !important' : '32px !important',
+      padding: '6px !important',
+      margin: '0 !important',
+      borderRadius: '8px !important',
+      backgroundColor: 'transparent !important',
+      border: 'none !important',
+      cursor: 'pointer !important',
+      transition: 'background-color 0.12s ease',
+      '&:hover': {
+        backgroundColor: isDark
+          ? 'rgba(255,255,255,0.08) !important'
+          : 'rgba(43,47,69,0.05) !important',
+      },
+      '&.ql-active': {
+        backgroundColor: isDark
+          ? 'rgba(144,202,249,0.18) !important'
+          : 'rgba(91,111,214,0.1) !important',
+      },
+    },
+
+    // SVG icons
+    '& .ql-toolbar.ql-snow button svg': {
+      display: 'block !important',
+      visibility: 'visible !important',
+      opacity: '1 !important',
+      width: '18px !important',
+      height: '18px !important',
+      minWidth: '18px !important',
+      minHeight: '18px !important',
+      overflow: 'visible !important',
+    },
+
+    '& .ql-toolbar.ql-snow .ql-stroke': {
+      stroke: isDark ? '#ffffff !important' : '#2b2f45 !important',
+      strokeWidth: '2 !important',
+      fill: 'none !important',
+    },
+    '& .ql-toolbar.ql-snow .ql-fill': {
+      fill: isDark ? '#ffffff !important' : '#2b2f45 !important',
+      stroke: 'none !important',
+    },
+    '& .ql-toolbar.ql-snow button.ql-active .ql-stroke': {
+      stroke: isDark ? '#90caf9 !important' : '#5b6fd6 !important',
+      strokeWidth: '2.6 !important',
+    },
+    '& .ql-toolbar.ql-snow button.ql-active .ql-fill': {
+      fill: isDark ? '#90caf9 !important' : '#5b6fd6 !important',
+    },
+
+    '& .ql-toolbar.ql-snow .ql-formats': {
+      display: 'inline-flex !important',
+      alignItems: 'center !important',
+      gap: '4px !important',
+      margin: '0 !important',
+      marginRight: isMobile ? '4px !important' : '8px !important',
+    },
+
+    // ============ EDITOR ============
+    '& .ql-container.ql-snow': {
+      backgroundColor: 'transparent',
+      border: 'none',
+      fontSize: isMobile ? '16px' : '0.9375rem',
+      fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
+      minHeight: isReply
+        ? isMobile
+          ? '55px'
+          : '75px'
+        : isMobile
+        ? '75px'
+        : '105px',
+      maxHeight: isReply ? 240 : 400,
+      overflowY: 'auto',
+      lineHeight: 1.7,
+    },
+    '& .ql-container.ql-snow .ql-editor': {
+      color: isDark ? '#e0e0e0' : '#2b2f45',
+      minHeight: isReply
+        ? isMobile
+          ? '55px'
+          : '75px'
+        : isMobile
+        ? '75px'
+        : '105px',
+      maxHeight: isReply ? 240 : 400,
+      overflowY: 'auto',
+      padding: isMobile ? '8px 2px' : '10px 4px',
+      fontSize: isMobile ? '16px' : '0.9375rem',
+      lineHeight: 1.7,
+      '&:focus': { outline: 'none' },
+    },
+    '& .ql-container.ql-snow .ql-editor.ql-blank::before': {
+      color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(43,47,69,0.4)',
+      fontStyle: 'normal',
+      left: isMobile ? 2 : 4,
+      fontSize: isMobile ? '15px' : '0.9375rem',
+    },
+  };
+};
+
+// ============================================================
+// SINGLE COMMENT
+// ============================================================
 const SingleComment: React.FC<{
   comment: Comment;
   onDelete: (commentId: string) => void;
@@ -152,16 +278,19 @@ const SingleComment: React.FC<{
   const hasReplies = comment.replies && comment.replies.length > 0;
   const isReply = depth > 0;
 
-  // Memoize Quill modules for performance
-  const quillModulesReply = useMemo(() => getQuillModules(true), []);
+  const maxDepthMobile = 2;
+  const shouldNestMobile = isMobile && depth < maxDepthMobile;
+
+  const quillModulesReply = useMemo(
+    () => getQuillModules(isMobile),
+    [isMobile]
+  );
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
   };
 
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
+  const handleMenuClose = () => setAnchorEl(null);
 
   const handleEdit = () => {
     setEditingComment(comment.id);
@@ -182,7 +311,7 @@ const SingleComment: React.FC<{
     try {
       await onEdit(comment.id, editContent);
       setEditingComment(null);
-      showSuccess('Comment updated!');
+      showSuccess('Comment updated');
     } catch (error: any) {
       showError(error.message || 'Failed to update comment');
     }
@@ -194,9 +323,7 @@ const SingleComment: React.FC<{
       return;
     }
     setShowReplyBox(!showReplyBox);
-    if (replyingTo !== comment.id) {
-      setReplyingTo(comment.id);
-    }
+    if (replyingTo !== comment.id) setReplyingTo(comment.id);
   };
 
   const handleCancelReply = () => {
@@ -219,223 +346,147 @@ const SingleComment: React.FC<{
       setShowReplyBox(false);
       setReplyingTo(null);
       setIsReplyFocused(false);
-      showSuccess('Reply added!');
-    } catch (error) {
+      showSuccess('Reply added');
+    } catch {
       showError('Failed to add reply');
     } finally {
       setIsSubmittingReply(false);
     }
   };
 
-  const toggleReplies = () => {
-    setShowReplies(!showReplies);
-  };
+  const toggleReplies = () => setShowReplies(!showReplies);
 
   const getUserInitials = (name: string): string => {
     if (name === 'Anonymous') return 'A';
     const parts = name.split(' ');
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
     return name.substring(0, 2).toUpperCase();
   };
 
   const getAvatarColor = (userId: string) => {
-    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFD93D', '#DDA0DD', '#FF8A5C', '#A29BFE'];
-    const index = userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const colors = [
+      '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
+      '#FFD93D', '#DDA0DD', '#FF8A5C', '#A29BFE',
+    ];
+    const index = userId
+      .split('')
+      .reduce((acc, char) => acc + char.charCodeAt(0), 0);
     return colors[index % colors.length];
   };
 
   const displayName = comment.is_anonymous ? 'Anonymous' : comment.user_name;
   const initials = getUserInitials(displayName);
   const avatarColor = getAvatarColor(comment.user_id);
-  const avatarSize = isMobile ? 32 : 40;
-
-  // Quill styles - NO BORDERS, smooth animation
-  const getQuillStyles = (isReply: boolean, isFocused: boolean) => ({
-    minHeight: isReply ? '100px' : '150px',
-    maxHeight: isReply ? '300px' : '500px',
-    height: 'auto',
-    marginBottom: isFocused ? '55px' : '10px',
-    backgroundColor: 'transparent',
-    color: isDark ? '#e0e0e0' : '#333333',
-    border: 'none',
-    borderRadius: '8px',
-    transition: 'all 0.3s ease',
-    '& .ql-toolbar': {
-      backgroundColor: 'transparent',
-      border: 'none',
-      borderRadius: '8px 8px 0 0',
-      borderBottom: isFocused ? `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'}` : 'none',
-      opacity: isFocused ? 1 : 0,
-      maxHeight: isFocused ? '60px' : '0px',
-      padding: isFocused ? '8px 4px' : '0px',
-      overflow: 'hidden',
-      transition: 'all 0.3s ease',
-      transform: isFocused ? 'translateY(0)' : 'translateY(-10px)',
-      pointerEvents: isFocused ? 'auto' : 'none',
-      // Custom tooltip styles for Quill toolbar buttons
-      '& .ql-bold .ql-stroke': { strokeWidth: '2px' },
-      '& .ql-italic .ql-stroke': { strokeWidth: '2px' },
-      '& .ql-underline .ql-stroke': { strokeWidth: '2px' },
-      '& .ql-strike .ql-stroke': { strokeWidth: '2px' },
-    },
-    '& .ql-container': {
-      backgroundColor: 'transparent',
-      border: 'none',
-      borderRadius: isFocused ? '0 0 8px 8px' : '8px',
-      fontSize: '0.9375rem',
-      fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
-      minHeight: isReply ? '80px' : '120px',
-      maxHeight: isReply ? '250px' : '450px',
-      overflowY: 'auto',
-      cursor: 'text',
-      transition: 'all 0.3s ease',
-    },
-    '& .ql-editor': {
-      color: isDark ? '#e0e0e0' : '#333333',
-      minHeight: isReply ? '80px' : '120px',
-      maxHeight: isReply ? '250px' : '450px',
-      overflowY: 'auto',
-      padding: isFocused ? '12px 16px' : '12px 16px',
-      fontSize: '0.9375rem',
-      lineHeight: '1.7',
-      '&:focus': {
-        outline: 'none',
-      },
-      '&::-webkit-scrollbar': {
-        width: '6px',
-      },
-      '&::-webkit-scrollbar-track': {
-        background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-        borderRadius: '3px',
-      },
-      '&::-webkit-scrollbar-thumb': {
-        background: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)',
-        borderRadius: '3px',
-        '&:hover': {
-          background: isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)',
-        },
-      },
-    },
-    '& .ql-editor.ql-blank::before': {
-      color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)',
-      fontStyle: 'italic',
-    },
-    '& .ql-stroke': {
-      stroke: isDark ? '#e0e0e0' : '#333333',
-    },
-    '& .ql-fill': {
-      fill: isDark ? '#e0e0e0' : '#333333',
-    },
-    '& .ql-picker-label': {
-      color: isDark ? '#e0e0e0' : '#333333',
-    },
-    '& .ql-picker-options': {
-      backgroundColor: isDark ? '#2d2d2d' : '#ffffff',
-      color: isDark ? '#e0e0e0' : '#333333',
-      border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.06)',
-    },
-    '& .ql-toolbar .ql-active': {
-      color: isDark ? '#90caf9' : '#1976d2',
-    },
-    '& .ql-toolbar button:hover': {
-      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
-      borderRadius: '4px',
-    },
-    '& .ql-toolbar button.ql-active': {
-      backgroundColor: isDark ? 'rgba(144, 202, 249, 0.15)' : 'rgba(25, 118, 210, 0.08)',
-      borderRadius: '4px',
-    },
-  });
+  const avatarSize = isMobile ? 36 : 40;
 
   return (
-    <Box 
-      sx={{ 
-        ml: isReply ? (isMobile ? 2 : 3) : 0,
-        pl: isReply ? (isMobile ? 1.5 : 2) : 0,
-        borderLeft: isReply ? `2px solid ${avatarColor}15` : 'none',
+    <Box
+      sx={{
+        ml: isReply ? (shouldNestMobile ? 1.5 : 0) : 0,
+        pl: isReply ? (shouldNestMobile ? 1.5 : 0) : 0,
+        borderLeft: isReply && shouldNestMobile
+          ? `2px solid ${avatarColor}22`
+          : 'none',
         position: 'relative',
-        transition: 'all 0.2s ease',
         pt: 1,
         pb: 0.5,
       }}
     >
-      <Fade in={true} timeout={200}>
+      <Fade in timeout={200}>
         <Box
           sx={{
-            p: isMobile ? 1.5 : 2,
+            p: isMobile ? 1.25 : 2,
             mb: 0.5,
             borderRadius: 2,
             backgroundColor: 'transparent',
-            transition: 'all 0.2s ease',
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: isMobile ? 1.5 : 2 }}>
-            <Avatar 
-              sx={{ 
-                width: avatarSize, 
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: isMobile ? 1.25 : 2,
+            }}
+          >
+            <Avatar
+              sx={{
+                width: avatarSize,
                 height: avatarSize,
                 bgcolor: avatarColor,
-                fontSize: isMobile ? '0.75rem' : '1rem',
+                fontSize: isMobile ? '0.8125rem' : '1rem',
                 fontWeight: 600,
-                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
                 border: 'none',
+                flexShrink: 0,
               }}
             >
               {initials}
             </Avatar>
 
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                <Typography variant="subtitle2" sx={{ 
-                  fontWeight: 700, 
-                  fontSize: isMobile ? '0.875rem' : '0.9375rem',
-                  color: 'text.primary',
-                }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <Typography
+                  variant="subtitle2"
+                  sx={{
+                    fontWeight: 700,
+                    fontSize: isMobile ? '0.875rem' : '0.9375rem',
+                    color: 'text.primary',
+                  }}
+                >
                   {displayName}
                 </Typography>
                 {comment.is_anonymous && (
-                  <Chip 
-                    label="Anonymous" 
-                    size="small" 
-                    variant="outlined"
-                    sx={{ 
-                      height: isMobile ? 16 : 20, 
-                      fontSize: isMobile ? '0.5rem' : '0.6rem',
+                  <Chip
+                    label="Anon"
+                    size="small"
+                    sx={{
+                      height: 18,
+                      fontSize: '0.6rem',
                       fontWeight: 600,
                       '& .MuiChip-label': { px: 0.75 },
                       border: 'none',
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
-                    }} 
+                      backgroundColor: isDark
+                        ? 'rgba(255,255,255,0.06)'
+                        : 'rgba(43,47,69,0.05)',
+                    }}
                   />
                 )}
-                <Typography variant="caption" sx={{ 
-                  color: 'text.secondary', 
-                  fontSize: isMobile ? '0.65rem' : '0.75rem',
-                }}>
-                  {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                    fontSize: isMobile ? '0.65rem' : '0.7rem',
+                  }}
+                >
+                  {formatDistanceToNow(new Date(comment.created_at), {
+                    addSuffix: true,
+                  })}
                 </Typography>
                 {isOwner && (
-                  <Chip 
-                    label="You" 
-                    size="small" 
-                    color="primary" 
-                    variant="outlined"
-                    sx={{ 
-                      height: isMobile ? 16 : 20, 
-                      fontSize: isMobile ? '0.5rem' : '0.6rem',
+                  <Chip
+                    label="You"
+                    size="small"
+                    color="primary"
+                    sx={{
+                      height: 18,
+                      fontSize: '0.6rem',
                       fontWeight: 600,
                       '& .MuiChip-label': { px: 0.75 },
                       border: 'none',
-                    }} 
+                    }}
                   />
                 )}
               </Box>
 
               {editingComment === comment.id ? (
                 <Box sx={{ mt: 1 }}>
-                  <Box sx={getQuillStyles(true, true)}>
+                  <Box sx={getQuillStyles(isDark, isMobile, true, true)}>
                     <ReactQuill
                       theme="snow"
                       value={editContent}
@@ -445,11 +496,32 @@ const SingleComment: React.FC<{
                       placeholder="Edit your comment..."
                     />
                   </Box>
-                  <Stack direction="row" spacing={0.5} sx={{ mt: 1 }}>
-                    <Button variant="contained" size="small" onClick={handleSaveEdit} startIcon={<Send />}>
+                  <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      onClick={handleSaveEdit}
+                      startIcon={<Send />}
+                      sx={{
+                        textTransform: 'none',
+                        borderRadius: 2,
+                        minHeight: 40,
+                        fontWeight: 600,
+                      }}
+                    >
                       Save
                     </Button>
-                    <Button variant="outlined" size="small" onClick={() => setEditingComment(null)}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => setEditingComment(null)}
+                      sx={{
+                        textTransform: 'none',
+                        borderRadius: 2,
+                        minHeight: 40,
+                        fontWeight: 600,
+                      }}
+                    >
                       Cancel
                     </Button>
                   </Stack>
@@ -462,44 +534,35 @@ const SingleComment: React.FC<{
                     lineHeight: 1.7,
                     color: 'text.primary',
                     wordWrap: 'break-word',
+                    overflowWrap: 'break-word',
                     mt: 0.5,
                     padding: 0,
-                    maxHeight: '400px',
+                    maxHeight: 400,
                     overflowY: 'auto',
                     border: 'none',
-                    '&::-webkit-scrollbar': {
-                      width: '6px',
-                    },
-                    '&::-webkit-scrollbar-track': {
-                      background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-                      borderRadius: '3px',
-                    },
-                    '&::-webkit-scrollbar-thumb': {
-                      background: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)',
-                      borderRadius: '3px',
-                      '&:hover': {
-                        background: isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)',
-                      },
-                    },
+                    WebkitOverflowScrolling: 'touch',
                     '& p': { margin: '0 0 4px 0' },
-                    '& ul, & ol': { paddingLeft: '24px', margin: '4px 0' },
+                    '& ul, & ol': { paddingLeft: '20px', margin: '4px 0' },
                     '& blockquote': {
-                      borderLeft: `4px solid ${isDark ? '#90caf9' : '#667eea'}`,
+                      borderLeft: `4px solid ${isDark ? '#90caf9' : '#5b6fd6'}`,
                       paddingLeft: '12px',
                       margin: '8px 0',
                       color: isDark ? '#b0b0c8' : '#666',
                       fontStyle: 'italic',
                     },
                     '& a': {
-                      color: isDark ? '#90caf9' : '#667eea',
+                      color: isDark ? '#90caf9' : '#5b6fd6',
                       textDecoration: 'underline',
+                      wordBreak: 'break-all',
                     },
                     '& strong': { fontWeight: 700 },
                     '& em': { fontStyle: 'italic' },
                     '& u': { textDecoration: 'underline' },
                     '& strike': { textDecoration: 'line-through' },
                     '& code': {
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#f5f5f5',
+                      backgroundColor: isDark
+                        ? 'rgba(255,255,255,0.06)'
+                        : '#f5f5f5',
                       padding: '2px 6px',
                       borderRadius: '4px',
                       fontFamily: 'monospace',
@@ -510,20 +573,34 @@ const SingleComment: React.FC<{
                 />
               )}
 
-              {!editingComment && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: isMobile ? 0.25 : 0.5, mt: 1, flexWrap: 'wrap' }}>
+              {editingComment !== comment.id && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: isMobile ? 0.5 : 1,
+                    mt: 1,
+                    flexWrap: 'wrap',
+                  }}
+                >
                   <Button
                     size="small"
-                    startIcon={<Reply sx={{ fontSize: isMobile ? 16 : 18 }} />}
+                    startIcon={<Reply sx={{ fontSize: 16 }} />}
                     onClick={handleReplyClick}
-                    sx={{ 
-                      color: 'text.secondary', 
-                      fontSize: isMobile ? '0.7rem' : '0.75rem',
-                      borderRadius: 2,
+                    sx={{
+                      color: 'text.secondary',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      borderRadius: 1.5,
                       textTransform: 'none',
+                      minHeight: 36,
+                      px: 1.25,
                       border: 'none',
                       '&:hover': {
-                        backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
+                        backgroundColor: isDark
+                          ? 'rgba(255,255,255,0.04)'
+                          : 'rgba(91,111,214,0.05)',
+                        color: isDark ? '#90caf9' : '#5b6fd6',
                       },
                     }}
                   >
@@ -534,53 +611,139 @@ const SingleComment: React.FC<{
                     <Button
                       size="small"
                       onClick={toggleReplies}
-                      sx={{ 
-                        color: 'text.secondary', 
-                        fontSize: isMobile ? '0.7rem' : '0.75rem',
-                        borderRadius: 2,
+                      startIcon={
+                        showReplies ? (
+                          <KeyboardArrowUp sx={{ fontSize: 16 }} />
+                        ) : (
+                          <KeyboardArrowDown sx={{ fontSize: 16 }} />
+                        )
+                      }
+                      sx={{
+                        color: 'text.secondary',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        borderRadius: 1.5,
                         textTransform: 'none',
+                        minHeight: 36,
+                        px: 1.25,
                         border: 'none',
                         '&:hover': {
-                          backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
+                          backgroundColor: isDark
+                            ? 'rgba(255,255,255,0.04)'
+                            : 'rgba(91,111,214,0.05)',
                         },
                       }}
                     >
-                      {showReplies ? `Hide replies (${comment.replies?.length})` : `Show replies (${comment.replies?.length})`}
+                      {showReplies
+                        ? `Hide ${comment.replies?.length}`
+                        : `Show ${comment.replies?.length}`}
                     </Button>
                   )}
 
                   {isOwner && (
-                    <>
-                      <IconButton size="small" onClick={handleMenuOpen} sx={{ p: 0.5, border: 'none' }}>
-                        <MoreVert sx={{ fontSize: isMobile ? 16 : 18 }} />
-                      </IconButton>
-                      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
-                        <MenuItem onClick={handleEdit}>
-                          <Edit fontSize="small" sx={{ mr: 1 }} /> Edit
-                        </MenuItem>
-                        <MenuItem onClick={onEditUser}>
-                          <Person fontSize="small" sx={{ mr: 1 }} /> Edit Profile
-                        </MenuItem>
-                        <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>
-                          <Delete fontSize="small" color="error" sx={{ mr: 1 }} /> Delete
-                        </MenuItem>
-                      </Menu>
-                    </>
+                    <IconButton
+                      size="small"
+                      onClick={handleMenuOpen}
+                      aria-label="Comment actions"
+                      sx={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 1.5,
+                        border: 'none',
+                        ml: 'auto',
+                        color: 'text.secondary',
+                        '&:hover': {
+                          backgroundColor: isDark
+                            ? 'rgba(255,255,255,0.05)'
+                            : 'rgba(91,111,214,0.06)',
+                        },
+                      }}
+                    >
+                      <MoreVert sx={{ fontSize: 18 }} />
+                    </IconButton>
                   )}
+
+                  <Menu
+                    anchorEl={anchorEl}
+                    open={Boolean(anchorEl)}
+                    onClose={handleMenuClose}
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                    transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                    slotProps={{
+                      paper: {
+                        sx: {
+                          mt: 0.5,
+                          borderRadius: 2,
+                          minWidth: 180,
+                          backgroundColor: isDark ? '#1e1e30' : '#ffffff',
+                          border: `1px solid ${
+                            isDark
+                              ? 'rgba(255,255,255,0.08)'
+                              : 'rgba(43,47,69,0.08)'
+                          }`,
+                          boxShadow: isDark
+                            ? '0 12px 32px rgba(0,0,0,0.5)'
+                            : '0 12px 32px rgba(43,47,69,0.12)',
+                        },
+                      },
+                    }}
+                  >
+                    <MenuItem
+                      onClick={handleEdit}
+                      sx={{ minHeight: 44, py: 1, px: 1.75 }}
+                    >
+                      <Edit fontSize="small" sx={{ mr: 1.5 }} /> Edit
+                    </MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        handleMenuClose();
+                        onEditUser();
+                      }}
+                      sx={{ minHeight: 44, py: 1, px: 1.75 }}
+                    >
+                      <Person fontSize="small" sx={{ mr: 1.5 }} /> Edit Profile
+                    </MenuItem>
+                    <MenuItem
+                      onClick={handleDelete}
+                      sx={{ minHeight: 44, py: 1, px: 1.75, color: 'error.main' }}
+                    >
+                      <Delete
+                        fontSize="small"
+                        color="error"
+                        sx={{ mr: 1.5 }}
+                      />
+                      Delete
+                    </MenuItem>
+                  </Menu>
                 </Box>
               )}
             </Box>
           </Box>
 
-          <Collapse in={showReplyBox && !!userEmail} timeout="auto">
+          <Collapse in={showReplyBox && !!userEmail} timeout={200}>
             <Box sx={{ mt: 1.5, pl: isMobile ? 4 : 6 }}>
-              <Divider sx={{ mb: 1.5, borderColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)' }} />
+              <Divider
+                sx={{
+                  mb: 1.5,
+                  borderColor: isDark
+                    ? 'rgba(255,255,255,0.04)'
+                    : 'rgba(43,47,69,0.05)',
+                }}
+              />
               <Box sx={{ display: 'flex', gap: isMobile ? 1 : 2 }}>
-                <Avatar sx={{ width: isMobile ? 28 : 32, height: isMobile ? 28 : 32, bgcolor: '#667eea', border: 'none' }}>
+                <Avatar
+                  sx={{
+                    width: isMobile ? 28 : 32,
+                    height: isMobile ? 28 : 32,
+                    bgcolor: '#5b6fd6',
+                    border: 'none',
+                    flexShrink: 0,
+                  }}
+                >
                   <Person fontSize="small" />
                 </Avatar>
-                <Box sx={{ flex: 1 }}>
-                  <Box sx={getQuillStyles(true, isReplyFocused)}>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Box sx={getQuillStyles(isDark, isMobile, isReplyFocused, true)}>
                     <ReactQuill
                       theme="snow"
                       value={replyContent}
@@ -596,20 +759,27 @@ const SingleComment: React.FC<{
                       }}
                     />
                   </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5, mt: 1 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'flex-end',
+                      gap: 1,
+                      mt: 1,
+                    }}
+                  >
                     <Button
                       size="small"
                       variant="text"
                       onClick={handleCancelReply}
                       disabled={isSubmittingReply}
-                      sx={{ 
-                        borderRadius: 2, 
+                      sx={{
+                        borderRadius: 2,
                         textTransform: 'none',
                         color: 'text.secondary',
                         fontSize: '0.75rem',
-                        minWidth: 'auto',
-                        px: 1,
-                        border: 'none',
+                        minHeight: 40,
+                        px: 1.5,
+                        fontWeight: 600,
                       }}
                     >
                       Cancel
@@ -617,37 +787,35 @@ const SingleComment: React.FC<{
                     <Button
                       size="small"
                       onClick={handleSubmitReply}
-                      disabled={!replyContent.trim() || replyContent === '<p><br></p>' || isSubmittingReply}
-                      startIcon={isSubmittingReply ? <CircularProgress size={14} color="inherit" /> : <Send sx={{ fontSize: 14 }} />}
-                      sx={{ 
-                        borderRadius: 2, 
+                      disabled={
+                        !replyContent.trim() ||
+                        replyContent === '<p><br></p>' ||
+                        isSubmittingReply
+                      }
+                      startIcon={
+                        isSubmittingReply ? (
+                          <CircularProgress size={14} color="inherit" />
+                        ) : (
+                          <Send sx={{ fontSize: 14 }} />
+                        )
+                      }
+                      sx={{
+                        borderRadius: 2,
                         textTransform: 'none',
                         fontWeight: 600,
                         fontSize: '0.75rem',
-                        minWidth: 'auto',
+                        minHeight: 40,
                         px: 2.5,
-                        py: 0.75,
-                        background: isDark 
+                        background: isDark
                           ? 'linear-gradient(135deg, rgba(144, 202, 249, 0.2), rgba(144, 202, 249, 0.05))'
-                          : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                          : 'linear-gradient(135deg, #5b6fd6 0%, #764ba2 100%)',
                         color: isDark ? '#90caf9' : '#fff',
                         border: '1px solid',
-                        borderColor: isDark ? 'rgba(144, 202, 249, 0.2)' : 'transparent',
-                        boxShadow: isDark 
-                          ? 'none'
-                          : '0 4px 20px rgba(102, 126, 234, 0.3)',
-                        '&:hover': {
-                          background: isDark 
-                            ? 'linear-gradient(135deg, rgba(144, 202, 249, 0.3), rgba(144, 202, 249, 0.1))'
-                            : 'linear-gradient(135deg, #5a6fd6 0%, #6a3f9a 100%)',
-                          boxShadow: isDark 
-                            ? '0 0 20px rgba(144, 202, 249, 0.1)'
-                            : '0 6px 30px rgba(102, 126, 234, 0.4)',
-                          transform: 'translateY(-1px)',
-                        },
-                        '&:active': {
-                          transform: 'scale(0.97)',
-                        },
+                        borderColor: isDark
+                          ? 'rgba(144, 202, 249, 0.2)'
+                          : 'transparent',
+                        boxShadow: 'none',
+                        '&:hover': { boxShadow: 'none' },
                       }}
                     >
                       Reply
@@ -685,155 +853,65 @@ const SingleComment: React.FC<{
   );
 };
 
-export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }) => {
+// ============================================================
+// MAIN COMMENT SECTION
+// ============================================================
+export const CommentSection: React.FC<CommentSectionProps> = ({
+  onCommentAdded,
+}) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isDark = theme.palette.mode === 'dark';
   const { showSuccess, showError } = useToast();
-  
+
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>(() => {
-    return localStorage.getItem('commentUserEmail');
-  });
-  const [userName, setUserName] = useState<string | null>(() => {
-    return localStorage.getItem('commentUserName');
-  });
-  const [isAnonymous, setIsAnonymous] = useState<boolean>(() => {
-    return localStorage.getItem('commentIsAnonymous') === 'true';
-  });
+  const [userEmail, setUserEmail] = useState<string | null>(() =>
+    localStorage.getItem('commentUserEmail')
+  );
+  const [userName, setUserName] = useState<string | null>(() =>
+    localStorage.getItem('commentUserName')
+  );
+  const [isAnonymous, setIsAnonymous] = useState<boolean>(
+    () => localStorage.getItem('commentIsAnonymous') === 'true'
+  );
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [editingComment, setEditingComment] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<'initial' | 'edit'>('initial');
-  const [pendingAction, setPendingAction] = useState<'comment' | 'reply' | null>(null);
-  const [existingUser, setExistingUser] = useState<{ email: string; name: string; is_anonymous: boolean } | null>(null);
+  const [pendingAction, setPendingAction] = useState<'comment' | 'reply' | null>(
+    null
+  );
+  const [existingUser, setExistingUser] = useState<{
+    email: string;
+    name: string;
+    is_anonymous: boolean;
+  } | null>(null);
   const [isMainFocused, setIsMainFocused] = useState(false);
   const isMounted = useRef(true);
 
-  // Memoize Quill modules for performance
-  const quillModulesMain = useMemo(() => ({
-    toolbar: {
-      container: [
-        [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-        ['bold', 'italic', 'underline', 'strike'],
-        ['blockquote', 'code-block'],
-        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-        ['link'],
-        ['clean']
-      ],
-    }
-  }), []);
+  const quillModulesMain = useMemo(
+    () => getQuillModules(isMobile),
+    [isMobile]
+  );
 
-  // Main Quill styles - NO BORDERS, smooth animation
-  const getMainQuillStyles = (isFocused: boolean) => ({
-    minHeight: '150px',
-    maxHeight: '500px',
-    height: 'auto',
-    marginBottom: isFocused ? '55px' : '10px',
-    backgroundColor: 'transparent',
-    color: isDark ? '#e0e0e0' : '#333333',
-    border: 'none',
-    borderRadius: '8px',
-    transition: 'all 0.3s ease',
-    '& .ql-toolbar': {
-      backgroundColor: 'transparent',
-      border: 'none',
-      borderRadius: '8px 8px 0 0',
-      borderBottom: isFocused ? `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'}` : 'none',
-      opacity: isFocused ? 1 : 0,
-      maxHeight: isFocused ? '60px' : '0px',
-      padding: isFocused ? '8px 4px' : '0px',
-      overflow: 'hidden',
-      transition: 'all 0.3s ease',
-      transform: isFocused ? 'translateY(0)' : 'translateY(-10px)',
-      pointerEvents: isFocused ? 'auto' : 'none',
-    },
-    '& .ql-container': {
-      backgroundColor: 'transparent',
-      border: 'none',
-      borderRadius: isFocused ? '0 0 8px 8px' : '8px',
-      fontSize: '0.9375rem',
-      fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
-      minHeight: '120px',
-      maxHeight: '450px',
-      overflowY: 'auto',
-      cursor: 'text',
-      transition: 'all 0.3s ease',
-    },
-    '& .ql-editor': {
-      color: isDark ? '#e0e0e0' : '#333333',
-      minHeight: '120px',
-      maxHeight: '450px',
-      overflowY: 'auto',
-      padding: '12px 16px',
-      fontSize: '0.9375rem',
-      lineHeight: '1.7',
-      '&:focus': {
-        outline: 'none',
-      },
-      '&::-webkit-scrollbar': {
-        width: '6px',
-      },
-      '&::-webkit-scrollbar-track': {
-        background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-        borderRadius: '3px',
-      },
-      '&::-webkit-scrollbar-thumb': {
-        background: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)',
-        borderRadius: '3px',
-        '&:hover': {
-          background: isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)',
-        },
-      },
-    },
-    '& .ql-editor.ql-blank::before': {
-      color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)',
-      fontStyle: 'italic',
-    },
-    '& .ql-stroke': {
-      stroke: isDark ? '#e0e0e0' : '#333333',
-    },
-    '& .ql-fill': {
-      fill: isDark ? '#e0e0e0' : '#333333',
-    },
-    '& .ql-picker-label': {
-      color: isDark ? '#e0e0e0' : '#333333',
-    },
-    '& .ql-picker-options': {
-      backgroundColor: isDark ? '#2d2d2d' : '#ffffff',
-      color: isDark ? '#e0e0e0' : '#333333',
-      border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.06)',
-    },
-    '& .ql-toolbar .ql-active': {
-      color: isDark ? '#90caf9' : '#1976d2',
-    },
-    '& .ql-toolbar button:hover': {
-      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
-      borderRadius: '4px',
-    },
-    '& .ql-toolbar button.ql-active': {
-      backgroundColor: isDark ? 'rgba(144, 202, 249, 0.15)' : 'rgba(25, 118, 210, 0.08)',
-      borderRadius: '4px',
-    },
-  });
+  const openJoinDialog = useCallback(() => {
+    setPendingAction('comment');
+    setDialogMode('initial');
+    setDialogOpen(true);
+  }, []);
 
   const fetchComments = useCallback(async () => {
     try {
       setLoading(true);
       const data = await commentService.getComments();
-      
-      if (isMounted.current) {
-        setComments(data);
-      }
+      if (isMounted.current) setComments(data);
     } catch (error) {
       console.error('Error loading comments:', error);
     } finally {
-      if (isMounted.current) {
-        setLoading(false);
-      }
+      if (isMounted.current) setLoading(false);
     }
   }, []);
 
@@ -845,20 +923,13 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
       .channel('comments-global')
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'comments',
-        },
+        { event: '*', schema: 'public', table: 'comments' },
         async () => {
-          console.log('🔄 Comment changed');
           await fetchComments();
           if (onCommentAdded) onCommentAdded();
         }
       )
-      .subscribe((status) => {
-        console.log('📡 Global subscription status:', status);
-      });
+      .subscribe();
 
     return () => {
       isMounted.current = false;
@@ -877,9 +948,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
             is_anonymous: user.is_anonymous,
           });
           setIsAnonymous(user.is_anonymous);
-          if (!user.is_anonymous) {
-            setUserName(user.name);
-          }
+          if (!user.is_anonymous) setUserName(user.name);
         } else {
           setExistingUser(null);
         }
@@ -888,12 +957,20 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
     checkUser();
   }, [userEmail]);
 
-  const handleUserSubmit = async (user: { email: string; name: string; is_anonymous: boolean }) => {
+  const handleUserSubmit = async (user: {
+    email: string;
+    name: string;
+    is_anonymous: boolean;
+  }) => {
     const isUpdate = existingUser && existingUser.email === user.email;
-    
+
     if (isUpdate) {
       try {
-        await commentService.updateUserProfile(user.email, user.name, user.is_anonymous);
+        await commentService.updateUserProfile(
+          user.email,
+          user.name,
+          user.is_anonymous
+        );
         setExistingUser({
           email: user.email,
           name: user.name,
@@ -905,9 +982,8 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
         localStorage.setItem('commentUserEmail', user.email);
         localStorage.setItem('commentUserName', user.name);
         localStorage.setItem('commentIsAnonymous', String(user.is_anonymous));
-        showSuccess('Profile updated successfully!');
-      } catch (error) {
-        console.error('Error updating profile:', error);
+        showSuccess('Profile updated');
+      } catch {
         showError('Failed to update profile');
         return;
       }
@@ -926,16 +1002,21 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
     }
 
     setDialogOpen(false);
-
-    if (pendingAction === 'comment') {
-      await handleAddComment();
-    }
+    if (pendingAction === 'comment') await handleAddComment();
     setPendingAction(null);
   };
 
-  const handleUpdateUser = async (user: { email: string; name: string; is_anonymous: boolean }) => {
+  const handleUpdateUser = async (user: {
+    email: string;
+    name: string;
+    is_anonymous: boolean;
+  }) => {
     try {
-      await commentService.updateUserProfile(user.email, user.name, user.is_anonymous);
+      await commentService.updateUserProfile(
+        user.email,
+        user.name,
+        user.is_anonymous
+      );
       setExistingUser({
         email: user.email,
         name: user.name,
@@ -947,10 +1028,9 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
       localStorage.setItem('commentUserEmail', user.email);
       localStorage.setItem('commentUserName', user.name);
       localStorage.setItem('commentIsAnonymous', String(user.is_anonymous));
-      showSuccess('Profile updated successfully!');
+      showSuccess('Profile updated');
       setDialogOpen(false);
-    } catch (error) {
-      console.error('Error updating profile:', error);
+    } catch {
       showError('Failed to update profile');
     }
   };
@@ -980,12 +1060,10 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
         },
         null
       );
-      
       setNewComment('');
       setIsMainFocused(false);
-      showSuccess('Comment added!');
-    } catch (error) {
-      console.error('Error adding comment:', error);
+      showSuccess('Comment added');
+    } catch {
       showError('Failed to add comment');
     } finally {
       setIsSubmitting(false);
@@ -1010,7 +1088,6 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
         },
         parentId
       );
-      return Promise.resolve();
     } catch (error) {
       console.error('Error adding reply:', error);
       throw error;
@@ -1023,29 +1100,23 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
       return;
     }
     try {
-      console.log(`✏️ Attempting to edit comment ${commentId}`);
       await commentService.updateComment(commentId, content, userEmail);
-      console.log(`✅ Comment ${commentId} edited successfully`);
-      
-      setComments(prev => 
-        prev.map(c => {
-          if (c.id === commentId) {
-            return { ...c, content };
-          }
+      setComments((prev) =>
+        prev.map((c) => {
+          if (c.id === commentId) return { ...c, content };
           if (c.replies) {
             return {
               ...c,
-              replies: c.replies.map(r => 
+              replies: c.replies.map((r) =>
                 r.id === commentId ? { ...r, content } : r
-              )
+              ),
             };
           }
           return c;
         })
       );
-      showSuccess('Comment updated!');
+      showSuccess('Comment updated');
     } catch (error: any) {
-      console.error('Error editing comment:', error);
       showError(error.message || 'Failed to edit comment');
       throw error;
     }
@@ -1058,21 +1129,17 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
       return;
     }
     try {
-      console.log(`🗑️ Attempting to delete comment ${commentId}`);
       await commentService.deleteComment(commentId, userEmail);
-      console.log(`✅ Comment ${commentId} deleted successfully`);
-      
-      setComments(prev => 
+      setComments((prev) =>
         prev
-          .filter(c => c.id !== commentId)
-          .map(c => ({
+          .filter((c) => c.id !== commentId)
+          .map((c) => ({
             ...c,
-            replies: c.replies?.filter(r => r.id !== commentId) || []
+            replies: c.replies?.filter((r) => r.id !== commentId) || [],
           }))
       );
-      showSuccess('Comment deleted!');
+      showSuccess('Comment deleted');
     } catch (error: any) {
-      console.error('Error deleting comment:', error);
       showError(error.message || 'Failed to delete comment');
     }
   };
@@ -1092,26 +1159,40 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
 
   return (
     <>
-      <Box sx={{ p: isMobile ? 2 : 3, mt: isMobile ? 2 : 3 }}>
-        {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: isMobile ? 2 : 3, flexWrap: 'wrap', gap: 1 }}>
-          <Typography variant={isMobile ? 'subtitle1' : 'h6'} sx={{ 
-            fontWeight: 700, 
-            display: 'flex', 
-            alignItems: 'center', 
+      <Box sx={{ p: isMobile ? 1.5 : 3, mt: isMobile ? 2 : 3 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            mb: isMobile ? 2 : 3,
+            flexWrap: 'wrap',
             gap: 1,
-            color: 'text.primary',
-          }}>
-            💬 Discussion
-            <Chip 
-              label={comments.length} 
-              size="small" 
-              sx={{ 
+          }}
+        >
+          <Typography
+            variant={isMobile ? 'subtitle1' : 'h6'}
+            sx={{
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              color: 'text.primary',
+              fontSize: isMobile ? '1rem' : '1.15rem',
+            }}
+          >
+            Discussion
+            <Chip
+              label={comments.length}
+              size="small"
+              sx={{
                 fontWeight: 600,
-                height: isMobile ? 20 : 24,
-                fontSize: isMobile ? '0.65rem' : '0.75rem',
-                backgroundColor: isDark ? 'rgba(144, 202, 249, 0.15)' : 'primary.main',
-                color: isDark ? '#90caf9' : '#fff',
+                height: 22,
+                fontSize: '0.7rem',
+                backgroundColor: isDark
+                  ? 'rgba(144, 202, 249, 0.15)'
+                  : 'rgba(91,111,214,0.1)',
+                color: isDark ? '#90caf9' : '#5b6fd6',
                 border: 'none',
                 '& .MuiChip-label': { px: 1 },
               }}
@@ -1120,15 +1201,21 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
           {userEmail && (
             <Button
               size="small"
-              startIcon={<Person />}
+              startIcon={<Person sx={{ fontSize: 16 }} />}
               onClick={handleEditUser}
-              sx={{ 
-                textTransform: 'none', 
+              sx={{
+                textTransform: 'none',
                 fontSize: '0.75rem',
-                color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)',
+                fontWeight: 600,
+                minHeight: 36,
+                px: 1.25,
+                color: isDark ? 'rgba(255,255,255,0.7)' : 'rgba(43,47,69,0.7)',
                 border: 'none',
+                borderRadius: 1.5,
                 '&:hover': {
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
+                  backgroundColor: isDark
+                    ? 'rgba(255,255,255,0.05)'
+                    : 'rgba(91,111,214,0.06)',
                 },
               }}
             >
@@ -1137,29 +1224,38 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
           )}
         </Box>
 
-        {/* Comment Input - Word-like WYSIWYG Editor with hidden toolbar */}
-        <Box sx={{ 
-          mb: isMobile ? 2 : 3,
-          p: isMobile ? 1.5 : 2,
-          borderRadius: 2,
-          backgroundColor: 'transparent',
-          display: 'flex',
-          gap: isMobile ? 1.5 : 2,
-          alignItems: 'flex-start',
-        }}>
-          <Avatar sx={{ width: isMobile ? 32 : 40, height: isMobile ? 32 : 40, bgcolor: '#667eea', border: 'none' }}>
+        <Box
+          sx={{
+            mb: isMobile ? 2 : 3,
+            p: isMobile ? 1.25 : 2,
+            borderRadius: 2,
+            backgroundColor: 'transparent',
+            display: 'flex',
+            gap: isMobile ? 1.25 : 2,
+            alignItems: 'flex-start',
+          }}
+        >
+          <Avatar
+            sx={{
+              width: isMobile ? 36 : 40,
+              height: isMobile ? 36 : 40,
+              bgcolor: '#5b6fd6',
+              border: 'none',
+              flexShrink: 0,
+            }}
+          >
             <Person />
           </Avatar>
-          <Box sx={{ flex: 1 }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
             {userEmail ? (
-              <Box sx={getMainQuillStyles(isMainFocused)}>
+              <Box sx={getQuillStyles(isDark, isMobile, isMainFocused, false)}>
                 <ReactQuill
                   theme="snow"
                   value={newComment}
                   onChange={setNewComment}
                   modules={quillModulesMain}
                   formats={quillFormats}
-                  placeholder="What are your thoughts? (Click to show toolbar)"
+                  placeholder="Write a comment..."
                   onFocus={() => setIsMainFocused(true)}
                   onBlur={() => {
                     if (!newComment || newComment === '<p><br></p>') {
@@ -1169,94 +1265,153 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
                 />
               </Box>
             ) : (
-              <TextField
-                fullWidth
-                multiline
-                rows={3}
-                placeholder="Click here to add your name and email to comment"
-                value={newComment}
-                disabled
-                variant="outlined"
-                onClick={() => {
-                  setPendingAction('comment');
-                  setDialogMode('initial');
-                  setDialogOpen(true);
+              <Box
+                onClick={openJoinDialog}
+                onTouchStart={openJoinDialog}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openJoinDialog();
+                  }
                 }}
+                aria-label="Tap to add your name and email to comment"
                 sx={{
-                  '& .MuiOutlinedInput-root': {
-                    backgroundColor: 'transparent',
-                    fontSize: '0.9375rem',
-                    fontFamily: 'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
-                    borderRadius: 2,
-                    cursor: 'pointer',
-                    border: 'none',
-                    '& fieldset': {
-                      border: 'none',
-                    },
-                    '&:hover fieldset': {
-                      border: 'none',
-                    },
+                  width: '100%',
+                  minHeight: 96,
+                  px: 2,
+                  py: 1.75,
+                  borderRadius: 2,
+                  border: `1px solid ${
+                    isDark ? 'rgba(255,255,255,0.08)' : 'rgba(43,47,69,0.1)'
+                  }`,
+                  backgroundColor: isDark
+                    ? 'rgba(255,255,255,0.02)'
+                    : 'rgba(91,111,214,0.02)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  transition:
+                    'border-color 0.15s ease, background-color 0.15s ease',
+                  touchAction: 'manipulation',
+                  WebkitTapHighlightColor: 'transparent',
+                  userSelect: 'none',
+                  '&:hover, &:active': {
+                    borderColor: isDark
+                      ? 'rgba(144,202,249,0.4)'
+                      : 'rgba(91,111,214,0.4)',
+                    backgroundColor: isDark
+                      ? 'rgba(144,202,249,0.05)'
+                      : 'rgba(91,111,214,0.04)',
+                  },
+                  '&:focus-visible': {
+                    outline: '2px solid',
+                    outlineColor: isDark ? '#90caf9' : '#5b6fd6',
+                    outlineOffset: 2,
                   },
                 }}
-              />
+              >
+                <Typography
+                  sx={{
+                    color: isDark
+                      ? 'rgba(255,255,255,0.45)'
+                      : 'rgba(43,47,69,0.5)',
+                    fontSize: '16px',
+                    fontStyle: 'italic',
+                    fontFamily:
+                      'Inter, Roboto, Open Sans, Segoe UI, sans-serif',
+                    pointerEvents: 'none',
+                  }}
+                >
+                  Tap here to add your name and email to comment
+                </Typography>
+              </Box>
             )}
-            
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5, flexWrap: 'wrap', gap: 0.5 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                mt: 1,
+                flexWrap: 'wrap',
+                gap: 0.75,
+              }}
+            >
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  minWidth: 0,
+                }}
+              >
                 {userEmail ? (
-                  <Typography variant="caption" color="text.secondary">
-                    Posting as: {isAnonymous ? 'Anonymous' : userName || 'User'}
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{
+                      fontSize: '0.7rem',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    Posting as:{' '}
+                    {isAnonymous ? 'Anonymous' : userName || 'User'}
                   </Typography>
                 ) : (
-                  <Typography variant="caption" color="text.secondary">
-                    Click the text box to add your details
-                  </Typography>
-                )}
-                {newComment && newComment !== '<p><br></p>' && (
-                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>
-                    • {newComment.replace(/<[^>]*>/g, '').length} characters
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ fontSize: '0.7rem' }}
+                  >
+                    Tap the text box to add your details
                   </Typography>
                 )}
               </Box>
               <Button
                 onClick={handleAddComment}
-                disabled={isSubmitting || !newComment.trim() || newComment === '<p><br></p>' || !userEmail}
-                startIcon={isSubmitting ? <CircularProgress size={16} color="inherit" /> : <Send sx={{ fontSize: 16 }} />}
-                sx={{ 
-                  borderRadius: 2, 
-                  textTransform: 'none', 
+                disabled={
+                  isSubmitting ||
+                  !newComment.trim() ||
+                  newComment === '<p><br></p>' ||
+                  !userEmail
+                }
+                startIcon={
+                  isSubmitting ? (
+                    <CircularProgress size={16} color="inherit" />
+                  ) : (
+                    <Send sx={{ fontSize: 16 }} />
+                  )
+                }
+                sx={{
+                  borderRadius: 2,
+                  textTransform: 'none',
                   fontWeight: 600,
-                  px: 3,
-                  py: 0.75,
+                  px: 2.5,
+                  py: 1,
                   minWidth: 'auto',
+                  minHeight: 44,
                   fontSize: '0.8125rem',
-                  background: isDark 
+                  background: isDark
                     ? 'linear-gradient(135deg, rgba(144, 202, 249, 0.2), rgba(144, 202, 249, 0.05))'
-                    : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    : 'linear-gradient(135deg, #5b6fd6 0%, #764ba2 100%)',
                   color: isDark ? '#90caf9' : '#fff',
                   border: '1px solid',
-                  borderColor: isDark ? 'rgba(144, 202, 249, 0.2)' : 'transparent',
-                  boxShadow: isDark 
-                    ? 'none'
-                    : '0 4px 20px rgba(102, 126, 234, 0.3)',
-                  transition: 'all 0.3s ease',
-                  '&:hover': {
-                    background: isDark 
-                      ? 'linear-gradient(135deg, rgba(144, 202, 249, 0.3), rgba(144, 202, 249, 0.1))'
-                      : 'linear-gradient(135deg, #5a6fd6 0%, #6a3f9a 100%)',
-                    boxShadow: isDark 
-                      ? '0 0 30px rgba(144, 202, 249, 0.1)'
-                      : '0 6px 30px rgba(102, 126, 234, 0.4)',
-                    transform: 'translateY(-2px)',
-                  },
-                  '&:active': {
-                    transform: 'scale(0.97)',
-                  },
+                  borderColor: isDark
+                    ? 'rgba(144, 202, 249, 0.2)'
+                    : 'transparent',
+                  boxShadow: 'none',
+                  '&:hover': { boxShadow: 'none' },
                   '&:disabled': {
-                    background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
-                    color: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)',
-                    boxShadow: 'none',
-                    transform: 'none',
+                    background: isDark
+                      ? 'rgba(255,255,255,0.05)'
+                      : 'rgba(43,47,69,0.06)',
+                    color: isDark
+                      ? 'rgba(255,255,255,0.25)'
+                      : 'rgba(43,47,69,0.25)',
                     borderColor: 'transparent',
                   },
                 }}
@@ -1267,19 +1422,29 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
           </Box>
         </Box>
 
-        <Divider sx={{ 
-          my: isMobile ? 1.5 : 2,
-          borderColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
-        }} />
+        <Divider
+          sx={{
+            my: isMobile ? 1.5 : 2,
+            borderColor: isDark
+              ? 'rgba(255,255,255,0.05)'
+              : 'rgba(43,47,69,0.06)',
+          }}
+        />
 
         {comments.length === 0 ? (
-          <Box sx={{ 
-            textAlign: 'center', 
-            py: isMobile ? 3 : 4, 
-            backgroundColor: 'transparent', 
-            borderRadius: 2,
-          }}>
-            <Typography variant="body2" color="text.secondary">
+          <Box
+            sx={{
+              textAlign: 'center',
+              py: isMobile ? 3 : 4,
+              backgroundColor: 'transparent',
+              borderRadius: 2,
+            }}
+          >
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ fontSize: '0.8125rem' }}
+            >
               No comments yet. Start the conversation!
             </Typography>
           </Box>
@@ -1308,7 +1473,6 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
         )}
       </Box>
 
-      {/* User Dialog */}
       <CommentDialog
         open={dialogOpen}
         onClose={() => {
@@ -1317,7 +1481,9 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ onCommentAdded }
         }}
         onSubmit={handleUserSubmit}
         onUpdate={handleUpdateUser}
-        title={dialogMode === 'edit' ? 'Edit Your Profile' : 'Join the Conversation'}
+        title={
+          dialogMode === 'edit' ? 'Edit Your Profile' : 'Join the Conversation'
+        }
         submitLabel={dialogMode === 'edit' ? 'Update' : 'Continue'}
         updateLabel="Save Changes"
         existingUser={dialogMode === 'edit' ? existingUser : null}
