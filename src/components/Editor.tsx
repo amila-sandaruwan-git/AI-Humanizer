@@ -1,4 +1,4 @@
-// src/components/Editor.tsx — updated sidebar with mobile-first segmented controls
+// src/components/Editor.tsx
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
@@ -62,7 +62,6 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
   const [fileName, setFileName] = useState<string | null>(null);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  // Desktop still uses collapsible sections
   const [toneOpen, setToneOpen] = useState(true);
   const [styleOpen, setStyleOpen] = useState(true);
   const [intensityOpen, setIntensityOpen] = useState(true);
@@ -124,12 +123,13 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
 
   const handleFileContent = useCallback(
     (content: string, name: string) => {
-      setTextImmediate((prev) => (prev ? prev + '\n\n' + content : content));
+      const newText = text ? text + '\n\n' + content : content;
+      setTextImmediate(newText);
       setFileName(name);
       setShowFileUpload(false);
       showInfo(`File "${name}" loaded`);
     },
-    [setTextImmediate, showInfo]
+    [text, setTextImmediate, showInfo]
   );
 
   const handleFileUploadClick = useCallback(() => {
@@ -179,7 +179,6 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
       dismissToast(toastId);
       showSuccess('Text humanized successfully');
 
-      // Close mobile settings drawer after humanizing so user sees result
       if (isMobile) setMobileSidebarOpen(false);
 
       setTimeout(() => {
@@ -268,9 +267,6 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
 
   const sliderValue = intensity === 'light' ? 1 : intensity === 'medium' ? 2 : 3;
 
-  // ============================================================
-  // Reusable toggle group styles (used on mobile)
-  // ============================================================
   const toggleGroupSx = {
     display: 'flex',
     gap: 0.5,
@@ -293,15 +289,11 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
         borderColor: isDark ? 'rgba(255,255,255,0.16)' : 'rgba(91,111,214,0.2)',
       },
       '&.Mui-selected': {
-        backgroundColor: isDark
-          ? 'rgba(144,202,249,0.14)'
-          : 'rgba(91,111,214,0.1)',
+        backgroundColor: isDark ? 'rgba(144,202,249,0.14)' : 'rgba(91,111,214,0.1)',
         color: isDark ? '#90caf9' : '#5b6fd6',
         borderColor: isDark ? 'rgba(144,202,249,0.4)' : 'rgba(91,111,214,0.4)',
         '&:hover': {
-          backgroundColor: isDark
-            ? 'rgba(144,202,249,0.2)'
-            : 'rgba(91,111,214,0.16)',
+          backgroundColor: isDark ? 'rgba(144,202,249,0.2)' : 'rgba(91,111,214,0.16)',
         },
       },
     },
@@ -323,33 +315,55 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
           backgroundColor: isDark ? '#1a1a2e' : '#ffffff',
         }}
       >
-        {/* Header */}
+        {/* Header — always on top, always visible */}
         <Box
           sx={{
             p: { xs: 1.75, sm: 2 },
-            pt: { xs: 2, sm: 3 },
+            pt: { xs: 1.75, sm: 3 },
             borderBottom: `1px solid ${
               isDark ? 'rgba(255,255,255,0.06)' : 'rgba(43,47,69,0.07)'
             }`,
             flexShrink: 0,
+            position: 'relative',
+            zIndex: 2,
+            backgroundColor: isDark ? '#1a1a2e' : '#ffffff',
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Tune sx={{ color: 'primary.main', fontSize: 20 }} />
             <Typography
               variant="subtitle1"
-              sx={{ fontWeight: 700, fontSize: '0.9375rem', color: 'text.primary', flex: 1 }}
+              sx={{
+                fontWeight: 700,
+                fontSize: '0.9375rem',
+                color: 'text.primary',
+                flex: 1,
+              }}
             >
               Settings
             </Typography>
             {isMobile && (
               <IconButton
-                size="small"
                 onClick={() => setMobileSidebarOpen(false)}
                 aria-label="Close settings"
-                sx={{ p: 1 }}
+                sx={{
+                  p: 1,
+                  minWidth: 44,
+                  minHeight: 44,
+                  borderRadius: 2,
+                  color: 'text.secondary',
+                  backgroundColor: isDark
+                    ? 'rgba(255,255,255,0.05)'
+                    : 'rgba(43,47,69,0.04)',
+                  '&:hover': {
+                    backgroundColor: isDark
+                      ? 'rgba(255,255,255,0.1)'
+                      : 'rgba(43,47,69,0.08)',
+                    color: 'text.primary',
+                  },
+                }}
               >
-                <Close fontSize="small" />
+                <Close sx={{ fontSize: 22 }} />
               </IconButton>
             )}
           </Box>
@@ -441,12 +455,9 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
             }}
           />
 
-          {/* ============================================
-              MOBILE: Segmented control layout
-              ============================================ */}
+          {/* MOBILE: segmented controls */}
           {isMobile ? (
             <Stack spacing={2.5}>
-              {/* TONE */}
               <Box>
                 <Typography
                   variant="caption"
@@ -485,7 +496,6 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
                 </ToggleButtonGroup>
               </Box>
 
-              {/* STYLE */}
               <Box>
                 <Typography
                   variant="caption"
@@ -521,7 +531,6 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
                 </ToggleButtonGroup>
               </Box>
 
-              {/* INTENSITY */}
               <Box>
                 <Typography
                   variant="caption"
@@ -576,11 +585,8 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
               </Box>
             </Stack>
           ) : (
-            /* ============================================
-                DESKTOP: Keep the detailed collapsible cards
-                ============================================ */
             <>
-              {/* TONE */}
+              {/* DESKTOP: collapsible cards */}
               <Box sx={{ mb: 2 }}>
                 <Box
                   onClick={() => setToneOpen(!toneOpen)}
@@ -718,7 +724,6 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
                 }}
               />
 
-              {/* STYLE */}
               <Box sx={{ mb: 2 }}>
                 <Box
                   onClick={() => setStyleOpen(!styleOpen)}
@@ -855,7 +860,6 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
                 }}
               />
 
-              {/* INTENSITY */}
               <Box sx={{ mb: 2 }}>
                 <Box
                   onClick={() => setIntensityOpen(!intensityOpen)}
@@ -1158,7 +1162,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
         </Box>
       )}
 
-      {/* SIDEBAR - Mobile Drawer */}
+      {/* SIDEBAR - Mobile Drawer (simplified — no extra drag handle) */}
       {isMobile && (
         <Drawer
           anchor="bottom"
@@ -1175,34 +1179,12 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
           }}
           ModalProps={{ keepMounted: false }}
         >
-          {/* Drag handle for native feel */}
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'center',
-              pt: 1.25,
-              pb: 0.5,
-              flexShrink: 0,
-            }}
-          >
-            <Box
-              sx={{
-                width: 36,
-                height: 4,
-                borderRadius: 2,
-                backgroundColor: isDark
-                  ? 'rgba(255,255,255,0.2)'
-                  : 'rgba(43,47,69,0.2)',
-              }}
-            />
-          </Box>
           {sidebarContent}
         </Drawer>
       )}
 
       {/* MAIN CONTENT */}
       <Box sx={{ flex: 1, minWidth: 0, width: '100%' }}>
-        {/* Main Header */}
         <Box
           sx={{
             display: 'flex',
