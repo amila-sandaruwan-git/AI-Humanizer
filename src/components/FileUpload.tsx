@@ -1,5 +1,3 @@
-// src/components/FileUpload.tsx
-
 import React, { useRef, useState } from 'react';
 import {
   Box,
@@ -18,6 +16,7 @@ import {
   InsertDriveFile,
 } from '@mui/icons-material';
 import { useToast } from '../context/ToastContext';
+import { useTheme } from '@mui/material/styles';
 
 interface FileUploadProps {
   onFileContent: (content: string, fileName: string) => void;
@@ -28,6 +27,8 @@ const FileUpload: React.FC<FileUploadProps> = ({
   onFileContent, 
   acceptedFormats = ['.txt', '.docx', '.pdf', '.md'] 
 }) => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [fileInfo, setFileInfo] = useState<{ name: string; size: number; type: string } | null>(null);
@@ -193,6 +194,16 @@ ${content}`;
     setIsDragging(false);
   };
 
+  const handleAreaClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  // FIXED: Browse button - stops propagation and opens file picker
+  const handleBrowseClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation(); // Prevent parent click handler
+    fileInputRef.current?.click();
+  };
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
@@ -216,21 +227,30 @@ ${content}`;
         variant="outlined"
         sx={{
           p: 3,
-          border: isDragging ? '3px dashed #1976d2' : '2px dashed #ccc',
-          backgroundColor: isDragging ? 'rgba(25, 118, 210, 0.04)' : 'transparent',
+          border: isDragging 
+            ? '2px dashed #667eea' 
+            : `2px dashed ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)'}`,
+          backgroundColor: isDragging 
+            ? (isDark ? 'rgba(102,126,234,0.08)' : 'rgba(102,126,234,0.04)')
+            : 'transparent',
           transition: 'all 0.3s ease',
           cursor: 'pointer',
           position: 'relative',
-          minHeight: 120,
+          minHeight: 140,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
+          borderRadius: 3,
+          '&:hover': {
+            borderColor: isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.2)',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
+          },
         }}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={handleAreaClick}
       >
         <input
           ref={fileInputRef}
@@ -270,15 +290,33 @@ ${content}`;
             </IconButton>
           </Box>
         ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, textAlign: 'center' }}>
-            <CloudUpload sx={{ fontSize: 48, color: '#1976d2' }} />
-            <Typography variant="body1" color="text.secondary">
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, textAlign: 'center' }}>
+            <CloudUpload sx={{ fontSize: 48, color: 'primary.main' }} />
+            <Typography variant="body1" color="text.secondary" sx={{ fontWeight: 500 }}>
               Drag & drop a file here, or click to browse
             </Typography>
             <Typography variant="caption" color="text.secondary">
               Supports: {acceptedFormats.join(', ')} • Max size: 10MB
             </Typography>
-            <Button variant="outlined" size="small" sx={{ mt: 1 }}>
+            {/* FIXED: Browse Files button with stopPropagation */}
+            <Button 
+              variant="outlined" 
+              size="small" 
+              onClick={handleBrowseClick}
+              sx={{ 
+                mt: 1,
+                borderRadius: 2,
+                textTransform: 'none',
+                fontWeight: 600,
+                px: 3,
+                borderColor: 'primary.main',
+                color: 'primary.main',
+                '&:hover': {
+                  backgroundColor: 'rgba(102,126,234,0.06)',
+                  borderColor: 'primary.dark',
+                },
+              }}
+            >
               Browse Files
             </Button>
           </Box>

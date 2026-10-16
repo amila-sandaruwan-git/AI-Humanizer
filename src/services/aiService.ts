@@ -32,7 +32,7 @@ export const calculateSimilarity = (text1: string, text2: string): number => {
   return Math.round((intersection.length / union.size) * 100);
 };
 
-// ============ LANGUAGE TOOL API INTEGRATION ============
+// ============ LANGUAGE TOOL API - ENHANCED ============
 
 interface GrammarMatch {
   message: string;
@@ -60,6 +60,26 @@ interface GrammarResponse {
   software: { name: string; version: string; buildDate: string };
 }
 
+// Categories we want to fix (grammar, not style)
+const GRAMMAR_CATEGORIES = [
+  'GRAMMAR',
+  'TYPOS',
+  'PUNCTUATION',
+  'CASING',
+  'AGREEMENT',
+  'VERB_FORM',
+];
+
+// Rule IDs that should be SKIPPED (too aggressive or break proper nouns)
+const SKIP_RULES = [
+  'UPPERCASE_SENTENCE_START', // We handle this ourselves
+  'MORFOLOGIK_RULE_EN_US',    // Spelling - too aggressive with names
+  'EN_QUOTES',                // Quote style - personal preference
+  'WHITESPACE_RULE',          // We handle this
+  'PASSIVE_VOICE',            // Not a grammar error
+  'STYLE',                    // Style suggestions, not grammar
+];
+
 const checkGrammarWithLanguageTool = async (text: string, language: string = 'en-US'): Promise<GrammarResponse> => {
   try {
     const response = await fetch('https://api.languagetool.org/v2/check', {
@@ -71,6 +91,7 @@ const checkGrammarWithLanguageTool = async (text: string, language: string = 'en
         text: text,
         language: language,
         enabledOnly: 'false',
+        level: 'picky', // Gets more suggestions
       }),
     });
 
@@ -86,177 +107,186 @@ const checkGrammarWithLanguageTool = async (text: string, language: string = 'en
   }
 };
 
+// Enhanced correction applier - only apply high-confidence corrections
 const applyGrammarAPICorrections = (text: string, matches: GrammarMatch[]): string => {
+  if (!matches || matches.length === 0) return text;
+  
+  // Filter matches to only include grammar issues (not style)
+  const grammarMatches = matches.filter(match => {
+    // Skip certain rule IDs
+    if (SKIP_RULES.includes(match.rule.id)) return false;
+    
+    // Only include grammar categories
+    const categoryName = match.rule.category?.name?.toUpperCase() || '';
+    const issueType = match.rule.issueType?.toLowerCase() || '';
+    
+    // Check if it's a grammar issue
+    const isGrammarIssue = 
+      GRAMMAR_CATEGORIES.some(cat => categoryName.includes(cat)) ||
+      issueType === 'grammar' ||
+      issueType === 'misspelling' ||
+      issueType === 'typography' ||
+      issueType === 'duplication' ||
+      issueType === 'inconsistency';
+    
+    // Skip if it's a style suggestion
+    if (issueType === 'style') return false;
+    
+    // Only fix if we have a replacement
+    if (!match.replacements || match.replacements.length === 0) return false;
+    
+    return isGrammarIssue;
+  });
+  
+  if (grammarMatches.length === 0) return text;
+  
+  // Sort by offset in REVERSE order (to avoid shifting positions)
+  const sortedMatches = [...grammarMatches].sort((a, b) => b.offset - a.offset);
+  
   let result = text;
   
-  const sortedMatches = [...matches].sort((a, b) => b.offset - a.offset);
-  
   for (const match of sortedMatches) {
-    if (match.replacements && match.replacements.length > 0) {
-      const replacement = match.replacements[0].value;
-      const before = result.substring(0, match.offset);
-      const after = result.substring(match.offset + match.length);
-      result = before + replacement + after;
+    // Take the FIRST replacement (usually the best one)
+    const replacement = match.replacements[0].value;
+    
+    // Get the word being replaced to check if it's a proper noun
+    const originalWord = result.substring(match.offset, match.offset + match.length);
+    
+    // Skip if the original is a proper noun (starts with capital, not at sentence start)
+    const isAtSentenceStart = match.offset === 0 || 
+      /[.!?]\s+$/.test(result.substring(0, match.offset));
+    
+    if (!isAtSentenceStart && /^[A-Z]/.test(originalWord.trim())) {
+      continue; // Skip proper nouns
     }
+    
+    // Skip if it's an acronym
+    const cleanOriginal = originalWord.replace(/[^a-zA-Z]/g, '');
+    if (cleanOriginal.length >= 2 && cleanOriginal === cleanOriginal.toUpperCase()) {
+      continue;
+    }
+    
+    // Apply the correction
+    const before = result.substring(0, match.offset);
+    const after = result.substring(match.offset + match.length);
+    result = before + replacement + after;
   }
   
   return result;
 };
 
 // ============ PROPER NOUN DETECTION ============
-// Words that should NEVER be replaced (names, places, brands, technical terms)
+
 const PROTECTED_WORDS = new Set([
   // Common names
   'amila', 'sandaruwan', 'john', 'jane', 'smith', 'david', 'sarah', 'michael',
   'james', 'robert', 'william', 'mary', 'patricia', 'jennifer', 'linda',
-  'elizabeth', 'barbara', 'susan', 'jessica', 'karen', 'nancy', 'lisa',
-  'margaret', 'sandra', 'ashley', 'kimberly', 'emily', 'donna', 'michelle',
   // Countries and cities
   'america', 'american', 'england', 'english', 'france', 'french', 'germany',
-  'german', 'italy', 'italian', 'spain', 'spanish', 'china', 'chinese',
-  'japan', 'japanese', 'india', 'indian', 'korea', 'korean', 'russia',
-  'russian', 'brazil', 'brazilian', 'canada', 'canadian', 'australia',
-  'australian', 'london', 'paris', 'tokyo', 'beijing', 'delhi', 'moscow',
-  'colombo', 'sri', 'lanka', 'singapore', 'dubai', 'newyork', 'york',
-  'california', 'texas', 'florida', 'washington', 'boston', 'chicago',
-  // Brands and companies
-  'google', 'microsoft', 'apple', 'amazon', 'facebook', 'twitter', 'instagram',
-  'youtube', 'netflix', 'spotify', 'uber', 'lyft', 'airbnb', 'tesla',
-  'samsung', 'sony', 'intel', 'nvidia', 'oracle', 'adobe', 'ibm',
-  // Technology
+  'italy', 'spain', 'china', 'japan', 'india', 'korea', 'russia', 'brazil',
+  'canada', 'australia', 'london', 'paris', 'tokyo', 'colombo', 'sri', 'lanka',
+  // Brands
+  'google', 'microsoft', 'apple', 'amazon', 'facebook', 'twitter', 'netflix',
+  // Tech
   'react', 'angular', 'vue', 'javascript', 'typescript', 'python', 'java',
-  'ruby', 'php', 'swift', 'kotlin', 'golang', 'rust', 'html', 'css', 'sql',
-  'mongodb', 'postgresql', 'mysql', 'redis', 'docker', 'kubernetes',
-  'linux', 'windows', 'macos', 'android', 'ios', 'ubuntu', 'debian',
-  'nodejs', 'node', 'npm', 'yarn', 'webpack', 'babel', 'jest', 'cypress',
-  'github', 'gitlab', 'bitbucket', 'vercel', 'netlify', 'heroku', 'aws',
-  'azure', 'gcp', 'firebase', 'supabase', 'openai', 'gemini', 'claude',
-  // Common proper nouns
+  'html', 'css', 'sql', 'mongodb', 'docker', 'linux', 'windows', 'android',
+  'github', 'openai', 'gemini', 'claude',
+  // Days and months
   'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
-  'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august',
+  'january', 'february', 'march', 'april', 'june', 'july', 'august',
   'september', 'october', 'november', 'december',
 ]);
 
-// Check if a word is likely a proper noun (starts with capital letter in original)
 const isProperNoun = (originalWord: string, cleanWord: string): boolean => {
-  // Check if the word is in the protected list
-  if (PROTECTED_WORDS.has(cleanWord.toLowerCase())) {
-    return true;
-  }
+  if (PROTECTED_WORDS.has(cleanWord.toLowerCase())) return true;
   
-  // Check if the original word starts with a capital letter
-  // (but not at the start of a sentence - that's normal capitalization)
   const wordWithoutPunctuation = originalWord.replace(/^[^a-zA-Z]*/, '').replace(/[^a-zA-Z]*$/, '');
-  
   if (wordWithoutPunctuation.length === 0) return false;
   
-  // If word starts with capital AND is not the first word of the sentence,
-  // it's likely a proper noun
-  const startsWithCapital = /^[A-Z]/.test(wordWithoutPunctuation);
-  
-  return startsWithCapital;
+  return /^[A-Z]/.test(wordWithoutPunctuation);
 };
 
-// Check if a word is an acronym or abbreviation
 const isAcronym = (word: string): boolean => {
   const clean = word.replace(/[^a-zA-Z]/g, '');
-  // All uppercase and length >= 2 (e.g., "AI", "API", "USA")
   return clean.length >= 2 && clean === clean.toUpperCase();
 };
 
-// Check if a word contains numbers (likely not a common word)
 const containsNumbers = (word: string): boolean => {
   return /\d/.test(word);
 };
 
 // ============ NATURAL LANGUAGE TRANSFORMATIONS ============
 
-// 1. Remove AI Transition Words
+// 1. Remove AI Transition Words - SAFER VERSION
 const removeAITransitions = (text: string): string => {
   const aiTransitions = [
     'furthermore', 'moreover', 'additionally', 'consequently', 
-    'accordingly', 'hence', 'thus', 'therefore', 'nonetheless',
-    'nevertheless', 'notwithstanding', 'it is important to note',
-    'it should be noted', 'it is worth mentioning', 'in conclusion',
-    'to summarize', 'in summary', 'as previously mentioned'
+    'accordingly', 'nonetheless', 'notwithstanding',
   ];
   
   let result = text;
   for (const word of aiTransitions) {
-    const regex = new RegExp(`\\b${word}\\b,?\\s*`, 'gi');
-    result = result.replace(regex, '');
+    // Only remove if it starts a sentence (safer)
+    const regex = new RegExp(`(^|[.!?]\\s+)${word},\\s*`, 'gi');
+    result = result.replace(regex, '$1');
   }
   return result;
 };
 
-// 2. Replace Overly Complex Verbs with Simple Ones
+// 2. Simplify Verbs - PRESERVES PROPER NOUNS
 const simplifyVerbs = (text: string): string => {
   const complexToSimple: { [key: string]: string } = {
     'utilize': 'use', 'utilizes': 'uses', 'utilized': 'used', 'utilizing': 'using',
     'demonstrate': 'show', 'demonstrates': 'shows', 'demonstrated': 'showed', 'demonstrating': 'showing',
     'facilitate': 'help', 'facilitates': 'helps', 'facilitated': 'helped', 'facilitating': 'helping',
-    'implement': 'use', 'implemented': 'used', 'implementing': 'using',
     'commence': 'start', 'commenced': 'started', 'commencing': 'starting',
     'terminate': 'end', 'terminated': 'ended', 'terminating': 'ending',
     'obtain': 'get', 'obtained': 'got', 'obtaining': 'getting',
-    'procure': 'get', 'procured': 'got', 'procuring': 'getting',
     'acquire': 'get', 'acquired': 'got', 'acquiring': 'getting',
     'endeavor': 'try', 'endeavored': 'tried', 'endeavoring': 'trying',
     'ascertain': 'find out', 'ascertained': 'found out', 'ascertaining': 'finding out',
-    'expedite': 'speed up', 'expedited': 'sped up', 'expediting': 'speeding up',
-    'augment': 'add to', 'augmented': 'added to', 'augmenting': 'adding to',
-    'diminish': 'lessen', 'diminished': 'lessened', 'diminishing': 'lessening',
     'elucidate': 'explain', 'elucidated': 'explained', 'elucidating': 'explaining',
-    'utilization': 'use', 'implementation': 'use', 'facilitation': 'help', 'demonstration': 'show'
   };
   
   let result = text;
   for (const [complex, simple] of Object.entries(complexToSimple)) {
     const regex = new RegExp(`\\b${complex}\\b`, 'gi');
-    result = result.replace(regex, simple);
+    result = result.replace(regex, (match) => {
+      // Preserve capitalization
+      if (/^[A-Z]/.test(match)) {
+        return simple.charAt(0).toUpperCase() + simple.slice(1);
+      }
+      return simple;
+    });
   }
   return result;
 };
 
-// 3. Cut Filler and Redundancy
+// 3. Cut Filler
 const cutFiller = (text: string): string => {
   const fillerPatterns = [
     { regex: /\bin order to\b/gi, replacement: 'to' },
-    { regex: /\bas a matter of fact\b/gi, replacement: '' },
-    { regex: /\bin point of fact\b/gi, replacement: '' },
     { regex: /\bthe fact that\b/gi, replacement: 'that' },
-    { regex: /\bas a result of the fact that\b/gi, replacement: 'because' },
     { regex: /\bdue to the fact that\b/gi, replacement: 'because' },
     { regex: /\bin the event that\b/gi, replacement: 'if' },
     { regex: /\bat this point in time\b/gi, replacement: 'now' },
-    { regex: /\bin this day and age\b/gi, replacement: 'today' },
     { regex: /\bfor the purpose of\b/gi, replacement: 'for' },
     { regex: /\bwith regard to\b/gi, replacement: 'about' },
     { regex: /\bin regards to\b/gi, replacement: 'about' },
-    { regex: /\bwith respect to\b/gi, replacement: 'about' },
-    { regex: /\bin terms of\b/gi, replacement: 'of' },
-    { regex: /\bas far as\s+(.+?)\s+is concerned\b/gi, replacement: 'for $1' },
-    { regex: /\bin the process of\b/gi, replacement: 'while' },
-    { regex: /\bat the same time as\b/gi, replacement: 'as' },
     { regex: /\bprior to\b/gi, replacement: 'before' },
     { regex: /\bsubsequent to\b/gi, replacement: 'after' },
-    { regex: /\bin close proximity to\b/gi, replacement: 'near' },
   ];
   
   let result = text;
   for (const pattern of fillerPatterns) {
     result = result.replace(pattern.regex, pattern.replacement);
   }
-  
-  result = result.replace(/\b(really|very|quite|rather|pretty)\s+(really|very|quite|rather|pretty)\b/gi, '$1');
   return result;
 };
 
-// 4. Mix Sentence Lengths - MODIFIED to preserve paragraph structure
+// 4. Mix Sentence Lengths
 const mixSentenceLengths = (text: string): string => {
-  if (/^#{1,6}\s/.test(text) || /^[•·▪◦●■□*\-+]/.test(text)) {
-    return text;
-  }
+  if (/^#{1,6}\s/.test(text) || /^[•·▪◦●■□*\-+]/.test(text)) return text;
   
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
   if (sentences.length <= 1) return text;
@@ -265,25 +295,10 @@ const mixSentenceLengths = (text: string): string => {
   let currentIndex = 0;
   
   while (currentIndex < sentences.length) {
-    if (Math.random() < 0.2 && currentIndex < sentences.length - 1) {
+    if (Math.random() < 0.15 && currentIndex < sentences.length - 1) {
       const combined = sentences[currentIndex].trim() + ' ' + sentences[currentIndex + 1].trim().toLowerCase();
       result.push(combined);
       currentIndex += 2;
-    } else if (Math.random() < 0.3 && sentences[currentIndex].split(' ').length > 15) {
-      const words = sentences[currentIndex].split(' ');
-      const mid = Math.floor(words.length / 2);
-      let splitPoint = mid;
-      for (let i = mid; i < Math.min(mid + 5, words.length - 2); i++) {
-        if (['and', 'but', 'or', 'so', 'because', 'although'].includes(words[i].toLowerCase())) {
-          splitPoint = i;
-          break;
-        }
-      }
-      const firstPart = words.slice(0, splitPoint).join(' ');
-      const secondPart = words.slice(splitPoint + 1).join(' ');
-      result.push(firstPart + '.');
-      result.push(secondPart.charAt(0).toUpperCase() + secondPart.slice(1));
-      currentIndex++;
     } else {
       result.push(sentences[currentIndex]);
       currentIndex++;
@@ -293,11 +308,9 @@ const mixSentenceLengths = (text: string): string => {
   return result.join(' ');
 };
 
-// 5. Vary Sentence Starters - MODIFIED to preserve paragraph structure
+// 5. Vary Sentence Starters
 const varySentenceStarters = (text: string): string => {
-  if (/^#{1,6}\s/.test(text) || /^[•·▪◦●■□*\-+]/.test(text)) {
-    return text;
-  }
+  if (/^#{1,6}\s/.test(text) || /^[•·▪◦●■□*\-+]/.test(text)) return text;
   
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
   if (sentences.length <= 1) return text;
@@ -305,9 +318,7 @@ const varySentenceStarters = (text: string): string => {
   const naturalStarters = [
     'Honestly,', 'To be honest,', 'Frankly,', 
     'In my view,', 'The way I see it,', 'From my perspective,',
-    'You know,', 'Actually,', 'Basically,', 'Essentially,',
-    'Interestingly,', 'Surprisingly,', 'Notably,', 'Significantly,',
-    'For instance,', 'Take, for example,', 'Consider,'
+    'Interestingly,', 'Surprisingly,', 'Notably,',
   ];
   
   let result = [];
@@ -315,18 +326,15 @@ const varySentenceStarters = (text: string): string => {
   
   for (let i = 0; i < sentences.length; i++) {
     let sentence = sentences[i].trim();
-    if (sentence.split(' ').length > 5) {
-      if (i > 0 && Math.random() < 0.25) {
-        let starter;
-        let attempts = 0;
-        do {
-          starter = naturalStarters[Math.floor(Math.random() * naturalStarters.length)];
-          attempts++;
-        } while (usedStarters.has(starter) && attempts < 10);
-        usedStarters.add(starter);
-        sentence = starter + ' ' + sentence.charAt(0).toLowerCase() + sentence.slice(1);
-        sentence = sentence.replace(/\.\./g, '.');
-      }
+    if (sentence.split(' ').length > 5 && i > 0 && Math.random() < 0.2) {
+      let starter;
+      let attempts = 0;
+      do {
+        starter = naturalStarters[Math.floor(Math.random() * naturalStarters.length)];
+        attempts++;
+      } while (usedStarters.has(starter) && attempts < 10);
+      usedStarters.add(starter);
+      sentence = starter + ' ' + sentence.charAt(0).toLowerCase() + sentence.slice(1);
     }
     result.push(sentence);
   }
@@ -358,21 +366,19 @@ const addNaturalContractions = (text: string): string => {
   return result;
 };
 
-// 7. Replace Generic Phrases with Specific Language
+// 7. Replace Generic Phrases
 const makeMoreSpecific = (text: string): string => {
   const genericToSpecific: { [key: string]: string[] } = {
-    'a lot': ['many', 'numerous', 'countless', 'a considerable number'],
-    'a lot of': ['many', 'numerous', 'countless', 'a considerable number of'],
-    'lots of': ['many', 'numerous', 'countless', 'a considerable number of'],
-    'some': ['a few', 'several', 'various', 'a number of'],
-    'stuff': ['things', 'items', 'elements', 'components', 'materials'],
-    'things': ['items', 'elements', 'components', 'factors', 'aspects'],
-    'nice': ['great', 'wonderful', 'excellent', 'remarkable', 'impressive'],
-    'good': ['great', 'excellent', 'fine', 'superior', 'outstanding', 'exceptional'],
-    'bad': ['poor', 'terrible', 'awful', 'inferior', 'substandard'],
-    'big': ['large', 'great', 'huge', 'massive', 'enormous', 'substantial'],
-    'small': ['little', 'tiny', 'compact', 'mini', 'petite', 'diminutive'],
-    'important': ['key', 'critical', 'essential', 'vital', 'crucial', 'paramount'],
+    'a lot of': ['many', 'numerous', 'countless'],
+    'lots of': ['many', 'numerous', 'countless'],
+    'a lot': ['many', 'numerous'],
+    'stuff': ['things', 'items', 'elements'],
+    'nice': ['great', 'excellent', 'remarkable'],
+    'good': ['great', 'excellent', 'fine', 'superior'],
+    'bad': ['poor', 'terrible', 'awful', 'inferior'],
+    'big': ['large', 'huge', 'massive', 'enormous'],
+    'small': ['little', 'tiny', 'compact', 'mini'],
+    'important': ['key', 'critical', 'essential', 'vital'],
   };
   
   let result = text;
@@ -385,7 +391,7 @@ const makeMoreSpecific = (text: string): string => {
   return result;
 };
 
-// ============ PRESERVE STRUCTURE HELPER ============
+// ============ PRESERVE STRUCTURE ============
 const preserveStructure = (text: string, humanizeFn: (line: string) => string): string => {
   const paragraphs = text.split(/\n\s*\n/);
   
@@ -399,7 +405,6 @@ const preserveStructure = (text: string, humanizeFn: (line: string) => string): 
       
       if (!content) return line;
       
-      // Check for bullet points or numbered lists
       const bulletMatch = content.match(/^([•·▪◦●■□*\-+]|\d+[.)]|[a-zA-Z][.)])(\s+)/);
       if (bulletMatch) {
         const bullet = bulletMatch[1];
@@ -409,7 +414,6 @@ const preserveStructure = (text: string, humanizeFn: (line: string) => string): 
         return `${leadingWhitespace}${bullet}${space}${humanizedContent}${trailingWhitespace}`;
       }
       
-      // Check for heading patterns
       const headingMatch = content.match(/^(#{1,6})\s+(.+)/);
       if (headingMatch) {
         const hashes = headingMatch[1];
@@ -418,32 +422,6 @@ const preserveStructure = (text: string, humanizeFn: (line: string) => string): 
         return `${leadingWhitespace}${hashes} ${humanizedHeading}${trailingWhitespace}`;
       }
       
-      // Check for checkbox/task list
-      const checkboxMatch = content.match(/^(\s*)([-*+])\s+\[([ xX])\]\s+(.+)/);
-      if (checkboxMatch) {
-        const indent = checkboxMatch[1] || '';
-        const marker = checkboxMatch[2];
-        const checked = checkboxMatch[3];
-        const textContent = checkboxMatch[4];
-        const humanizedContent = humanizeFn(textContent);
-        return `${indent}${marker} [${checked}] ${humanizedContent}`;
-      }
-      
-      // Check for horizontal rule
-      if (/^[-*_]{3,}$/.test(content)) {
-        return content;
-      }
-      
-      // Check for formatting (bold, italic)
-      const formattingMatch = content.match(/^(\*{1,3}|_{1,3})(.+?)\1$/);
-      if (formattingMatch) {
-        const marker = formattingMatch[1];
-        const textContent = formattingMatch[2];
-        const humanizedContent = humanizeFn(textContent);
-        return `${leadingWhitespace}${marker}${humanizedContent}${marker}${trailingWhitespace}`;
-      }
-      
-      // Regular line - humanize the content
       const humanizedContent = humanizeFn(content);
       return `${leadingWhitespace}${humanizedContent}${trailingWhitespace}`;
     });
@@ -454,10 +432,7 @@ const preserveStructure = (text: string, humanizeFn: (line: string) => string): 
   return processedParagraphs.join('\n\n');
 };
 
-// ============ WORD REPLACEMENT HELPER - STRICT MODE ============
-// This function ONLY replaces words that have a replacement in the dictionary.
-// Words WITHOUT a replacement stay EXACTLY as they are.
-// Proper nouns (names, places, brands) are NEVER replaced.
+// ============ WORD REPLACEMENT - STRICT MODE ============
 const replaceWordsInLine = (line: string, rate: number): string => {
   const words = line.split(/\s+/);
   
@@ -465,83 +440,42 @@ const replaceWordsInLine = (line: string, rate: number): string => {
     const originalWord = words[i];
     const cleanWord = originalWord.toLowerCase().replace(/[^a-z]/g, '');
     
-    // Skip empty words
     if (!cleanWord) continue;
     
-    // Skip words that are part of structure (headings, bullets)
     if (i === 0 && (line.trim().startsWith('#') || /^[•·▪◦●■□*\-+]|\d+[.)]|[a-zA-Z][.)]/.test(cleanWord))) {
       continue;
     }
     
-    // ============ PROTECTED WORD CHECKS ============
+    if (PROTECTED_WORDS.has(cleanWord)) continue;
+    if (i > 0 && isProperNoun(originalWord, cleanWord)) continue;
+    if (isAcronym(originalWord)) continue;
+    if (containsNumbers(originalWord)) continue;
+    if (!hasReplacement(cleanWord)) continue;
+    if (Math.random() >= rate) continue;
     
-    // Check 1: Is this a protected word (name, place, brand)?
-    if (PROTECTED_WORDS.has(cleanWord)) {
-      continue;
-    }
-    
-    // Check 2: Is this a proper noun (starts with capital, not first word)?
-    if (i > 0 && isProperNoun(originalWord, cleanWord)) {
-      continue;
-    }
-    
-    // Check 3: Is this an acronym (all caps)?
-    if (isAcronym(originalWord)) {
-      continue;
-    }
-    
-    // Check 4: Does this contain numbers?
-    if (containsNumbers(originalWord)) {
-      continue;
-    }
-    
-    // Check 5: Is this word in the dictionary?
-    if (!hasReplacement(cleanWord)) {
-      // NO replacement available - keep the word EXACTLY as it is
-      continue;
-    }
-    
-    // Random chance based on rate
-    if (Math.random() >= rate) {
-      // Rate didn't trigger - keep original
-      continue;
-    }
-    
-    // Get a replacement
     const replacement = getRandomReplacement(cleanWord);
+    if (!replacement) continue;
     
-    if (!replacement) {
-      // No replacement found - keep original
-      continue;
-    }
-    
-    // ============ PRESERVE PUNCTUATION AND CAPITALIZATION ============
-    
-    // Preserve punctuation from the original word
     const punctuationPrefix = originalWord.match(/^[^a-zA-Z]*/)?.[0] || '';
     const punctuationSuffix = originalWord.match(/[^a-zA-Z]*$/)?.[0] || '';
-    
-    // Check if original was capitalized
     const wordWithoutPunctuation = originalWord.replace(/^[^a-zA-Z]*/, '').replace(/[^a-zA-Z]*$/, '');
     const isCapitalized = /^[A-Z]/.test(wordWithoutPunctuation);
     
-    // Apply capitalization to replacement if needed
     let finalReplacement = replacement;
     if (isCapitalized && replacement.length > 0) {
       finalReplacement = replacement.charAt(0).toUpperCase() + replacement.slice(1);
     }
     
-    // Reconstruct word with punctuation
     words[i] = punctuationPrefix + finalReplacement + punctuationSuffix;
   }
   
   return words.join(' ');
 };
 
-// ============ LIGHT RESTRUCTURE FUNCTION ============
+// ============ LIGHT RESTRUCTURE ============
 const lightRestructure = (sentence: string): string => {
   const words = sentence.split(' ');
-  if (words.length > 6 && Math.random() < 0.5) {
+  if (words.length > 6 && Math.random() < 0.3) {
     const moveCount = Math.floor(Math.random() * 2) + 1;
     const moved = words.splice(0, moveCount);
     words.push(...moved);
@@ -550,7 +484,7 @@ const lightRestructure = (sentence: string): string => {
   return sentence;
 };
 
-// ============ LIGHT HUMANIZATION ============
+// ============ HUMANIZATION LEVELS ============
 const applyLightHumanization = (text: string): string => {
   return preserveStructure(text, (line) => {
     if (!line.trim()) return line;
@@ -561,7 +495,6 @@ const applyLightHumanization = (text: string): string => {
   });
 };
 
-// ============ MEDIUM HUMANIZATION ============
 const applyMediumHumanization = (text: string): string => {
   return preserveStructure(text, (line) => {
     if (!line.trim()) return line;
@@ -571,7 +504,7 @@ const applyMediumHumanization = (text: string): string => {
     result = cutFiller(result);
     result = removeAITransitions(result);
     
-    if (Math.random() < 0.3) {
+    if (Math.random() < 0.2) {
       result = lightRestructure(result);
     }
     
@@ -579,103 +512,14 @@ const applyMediumHumanization = (text: string): string => {
   });
 };
 
-// ============ HEAVY RESTRUCTURING FUNCTIONS ============
-const restructureSentenceHeavy = (sentence: string): string => {
-  if (/^#{1,6}\s/.test(sentence) || /^[•·▪◦●■□*\-+]/.test(sentence)) {
-    return sentence;
-  }
-  
-  let result = sentence;
-  const patterns = [
-    {
-      regex: /^(Because|Since|As|Given that)\s+(.+?),\s*(.+?)(\.|!|\?)/i,
-      replacement: (m: RegExpMatchArray) => `${m[3]} ${m[1].toLowerCase()} ${m[2]}${m[4]}`
-    },
-    {
-      regex: /^(.+?),\s*(although|though|while|whereas)\s+(.+?)(\.|!|\?)/i,
-      replacement: (m: RegExpMatchArray) => `${m[2]} ${m[3]}, ${m[1]}${m[4]}`
-    },
-    {
-      regex: /^If\s+(.+?),?\s+then?\s+(.+?)(\.|!|\?)/i,
-      replacement: (m: RegExpMatchArray) => `${m[2]} if ${m[1]}${m[3]}`
-    },
-    {
-      regex: /^When\s+(.+?),?\s+(.+?)(\.|!|\?)/i,
-      replacement: (m: RegExpMatchArray) => `${m[2]} when ${m[1]}${m[3]}`
-    },
-    {
-      regex: /^(.+?)\s+is\s+(.+?)(\.|!|\?)/i,
-      replacement: (m: RegExpMatchArray) => `${m[2]} is what ${m[1]} is${m[3]}`
-    },
-    {
-      regex: /^(.+?)\s+(does|did|will do)\s+(.+?)(\.|!|\?)/i,
-      replacement: (m: RegExpMatchArray) => `What ${m[1]} ${m[2]} is ${m[3]}${m[4]}`
-    }
-  ];
-  
-  for (const pattern of patterns) {
-    const match = result.match(pattern.regex);
-    if (match) {
-      return pattern.replacement(match);
-    }
-  }
-  
-  return result;
-};
-
-const changeVoiceHeavy = (sentence: string): string => {
-  if (/^#{1,6}\s/.test(sentence) || /^[•·▪◦●■□*\-+]/.test(sentence)) {
-    return sentence;
-  }
-  
-  const activeSimple = sentence.match(/^(\w+)\s+(\w+[sd]?)\s+(\w+)(\.|!|\?)/i);
-  if (activeSimple) {
-    const subject = activeSimple[1];
-    const verb = activeSimple[2];
-    const object = activeSimple[3];
-    const punct = activeSimple[4];
-    
-    let pastParticiple = verb;
-    if (verb.endsWith('s')) pastParticiple = verb.slice(0, -1) + 'ed';
-    else if (verb.endsWith('e')) pastParticiple = verb + 'd';
-    else if (verb.endsWith('y') && !/[aeiou]/.test(verb[verb.length - 2])) pastParticiple = verb.slice(0, -1) + 'ied';
-    else pastParticiple = verb + 'ed';
-    
-    return `The ${object} is ${pastParticiple} by ${subject}${punct}`;
-  }
-  
-  const passiveMatch = sentence.match(/^The\s+(.+?)\s+is\s+(\w+ed)\s+by\s+(.+?)(\.|!|\?)/i);
-  if (passiveMatch) {
-    const object = passiveMatch[1];
-    const verb = passiveMatch[2].replace(/ed$/, '');
-    const subject = passiveMatch[3];
-    const punct = passiveMatch[4];
-    
-    let presentVerb = verb;
-    if (verb.endsWith('e')) presentVerb = verb + 's';
-    else if (verb.endsWith('y') && !/[aeiou]/.test(verb[verb.length - 2])) presentVerb = verb.slice(0, -1) + 'ies';
-    else presentVerb = verb + 's';
-    
-    return `${subject} ${presentVerb} the ${object}${punct}`;
-  }
-  
-  return sentence;
-};
-
-// ============ HEAVY HUMANIZATION ============
 const applyHeavyHumanization = (text: string): string => {
   return preserveStructure(text, (line) => {
     if (!line.trim()) return line;
     
-    let result = replaceWordsInLine(line, 0.98);
-    
+    let result = replaceWordsInLine(line, 0.90);
     result = removeAITransitions(result);
     result = simplifyVerbs(result);
     result = cutFiller(result);
-    result = restructureSentenceHeavy(result);
-    result = changeVoiceHeavy(result);
-    result = mixSentenceLengths(result);
-    result = varySentenceStarters(result);
     result = addNaturalContractions(result);
     result = makeMoreSpecific(result);
     
@@ -683,22 +527,7 @@ const applyHeavyHumanization = (text: string): string => {
   });
 };
 
-// ============ APPLY ALL GRAMMAR CORRECTIONS ============
-const applyGrammarCorrections = (text: string): string => {
-  let result = text;
-  result = fixSubjectVerbAgreement(result);
-  result = fixTenseConsistency(result);
-  result = fixArticles(result);
-  result = fixPrepositions(result);
-  result = fixPronouns(result);
-  result = fixDoubleNegatives(result);
-  result = fixCapitalization(result);
-  result = fixPunctuation(result);
-  return result;
-};
-
 // ============ MAIN HUMANIZATION ============
-
 export const humanizeText = async (
   request: HumanizeRequest
 ): Promise<HumanizeResponse> => {
@@ -713,11 +542,12 @@ export const humanizeText = async (
   const originalWords = text.split(/\s+/).length;
   const originalSentences = text.match(/[^.!?]+[.!?]+/g)?.length || 1;
   
+  // Step 1: Apply humanization
   switch (intensity) {
     case 'light':
       humanized = applyLightHumanization(text);
       changes = {
-        sentencesRewritten: Math.floor(originalSentences * 0.4),
+        sentencesRewritten: Math.floor(originalSentences * 0.3),
         wordsChanged: Math.floor(originalWords * 0.55),
       };
       break;
@@ -725,7 +555,7 @@ export const humanizeText = async (
     case 'medium':
       humanized = applyMediumHumanization(text);
       changes = {
-        sentencesRewritten: Math.floor(originalSentences * 0.7),
+        sentencesRewritten: Math.floor(originalSentences * 0.5),
         wordsChanged: Math.floor(originalWords * 0.75),
       };
       break;
@@ -733,8 +563,8 @@ export const humanizeText = async (
     case 'heavy':
       humanized = applyHeavyHumanization(text);
       changes = {
-        sentencesRewritten: Math.floor(originalSentences * 0.95),
-        wordsChanged: Math.floor(originalWords * 0.98),
+        sentencesRewritten: Math.floor(originalSentences * 0.8),
+        wordsChanged: Math.floor(originalWords * 0.90),
       };
       break;
       
@@ -742,18 +572,23 @@ export const humanizeText = async (
       humanized = text;
   }
   
-  humanized = applyGrammarCorrections(humanized);
-  
+  // Step 2: Apply LanguageTool API for grammar checking
   try {
     const language = tone === 'casual' ? 'en-US' : 'en-US';
     const grammarResult = await checkGrammarWithLanguageTool(humanized, language);
     
     if (grammarResult.matches && grammarResult.matches.length > 0) {
+      const beforeLength = humanized.length;
       humanized = applyGrammarAPICorrections(humanized, grammarResult.matches);
-      changes.wordsChanged += grammarResult.matches.length;
+      const afterLength = humanized.length;
+      
+      // Count grammar corrections as word changes
+      if (beforeLength !== afterLength) {
+        changes.wordsChanged += Math.abs(afterLength - beforeLength) / 5;
+      }
     }
   } catch (error) {
-    console.warn('LanguageTool API failed, using internal corrections only:', error);
+    console.warn('LanguageTool API failed, using text as-is:', error);
   }
 
   return {
@@ -765,149 +600,4 @@ export const humanizeText = async (
     },
     changes,
   };
-};
-
-// ============ HELPER GRAMMAR FUNCTIONS ============
-
-const fixSubjectVerbAgreement = (text: string): string => {
-  const patterns = [
-    { regex: /\b(he|she|it|the\s+\w+)\s+(have)\b/gi, replacement: '$1 has' },
-    { regex: /\b(he|she|it|the\s+\w+)\s+(do)\b/gi, replacement: '$1 does' },
-    { regex: /\b(he|she|it|the\s+\w+)\s+(were)\b/gi, replacement: '$1 was' },
-    { regex: /\b(he|she|it|the\s+\w+)\s+(are)\b/gi, replacement: '$1 is' },
-    { regex: /\b(they|we|you|these|those|the\s+\w+s)\s+(has)\b/gi, replacement: '$1 have' },
-    { regex: /\b(they|we|you|these|those|the\s+\w+s)\s+(does)\b/gi, replacement: '$1 do' },
-    { regex: /\b(they|we|you|these|those|the\s+\w+s)\s+(was)\b/gi, replacement: '$1 were' },
-    { regex: /\b(they|we|you|these|those|the\s+\w+s)\s+(is)\b/gi, replacement: '$1 are' },
-  ];
-  
-  let result = text;
-  for (const pattern of patterns) {
-    result = result.replace(pattern.regex, pattern.replacement);
-  }
-  return result;
-};
-
-const fixTenseConsistency = (text: string): string => {
-  const hasPastTense = /\b(was|were|had|did|[a-z]+ed)\b/i.test(text);
-  const hasPresentTense = /\b(is|are|am|has|have|do|does|[a-z]+s)\b/i.test(text);
-  
-  let result = text;
-  
-  if (hasPastTense && hasPresentTense) {
-    const pastCount = (text.match(/\b(was|were|had|did|[a-z]+ed)\b/gi) || []).length;
-    const presentCount = (text.match(/\b(is|are|am|has|have|do|does|[a-z]+s)\b/gi) || []).length;
-    
-    if (pastCount > presentCount) {
-      const presentToPast: { [key: string]: string } = {
-        'is': 'was', 'are': 'were', 'am': 'was',
-        'has': 'had', 'have': 'had',
-        'do': 'did', 'does': 'did',
-        'go': 'went', 'make': 'made', 'take': 'took',
-        'give': 'gave', 'find': 'found', 'think': 'thought',
-        'know': 'knew', 'see': 'saw', 'look': 'looked',
-        'start': 'started', 'stop': 'stopped', 'change': 'changed',
-        'help': 'helped', 'show': 'showed', 'need': 'needed',
-        'want': 'wanted', 'work': 'worked', 'ask': 'asked',
-        'tell': 'told', 'use': 'used', 'call': 'called',
-        'try': 'tried', 'put': 'put', 'keep': 'kept',
-        'leave': 'left', 'feel': 'felt', 'bring': 'brought',
-        'begin': 'began', 'run': 'ran', 'stand': 'stood',
-        'understand': 'understood', 'speak': 'spoke', 'break': 'broke',
-        'come': 'came', 'draw': 'drew', 'eat': 'ate',
-        'drink': 'drank', 'drive': 'drove', 'fly': 'flew',
-        'grow': 'grew', 'meet': 'met', 'pay': 'paid',
-        'read': 'read', 'ride': 'rode', 'ring': 'rang',
-        'rise': 'rose', 'sing': 'sang', 'sit': 'sat',
-        'spend': 'spent', 'spread': 'spread', 'steal': 'stole',
-        'swim': 'swam', 'teach': 'taught', 'throw': 'threw',
-        'wake': 'woke', 'write': 'wrote'
-      };
-      
-      for (const [present, past] of Object.entries(presentToPast)) {
-        const regex = new RegExp(`\\b${present}\\b`, 'gi');
-        result = result.replace(regex, past);
-      }
-    }
-  }
-  return result;
-};
-
-const fixArticles = (text: string): string => {
-  let result = text;
-  result = result.replace(/\ba\s+([aeiouAEIOU][a-z]*)\b/g, 'an $1');
-  result = result.replace(/\ba\s+(hour|honest|honor|heir|herb)/gi, 'an $1');
-  result = result.replace(/\ban\s+([bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZ][a-z]*)\b/g, 'a $1');
-  result = result.replace(/\ban\s+(university|union|unicorn|uniform|united)/gi, 'a $1');
-  return result;
-};
-
-const fixPrepositions = (text: string): string => {
-  const corrections: { [key: string]: string } = {
-    'different than': 'different from', 'different to': 'different from',
-    'prior to': 'before', 'subsequent to': 'after',
-    'in regards to': 'regarding', 'irregardless of': 'regardless of',
-    'due to the fact that': 'because', 'in the event that': 'if',
-    'at this point in time': 'now', 'for the purpose of': 'for',
-    'in close proximity to': 'near', 'at the present time': 'now',
-    'in the near future': 'soon', 'on a regular basis': 'regularly',
-    'in a timely manner': 'promptly',
-  };
-  
-  let result = text;
-  for (const [incorrect, correct] of Object.entries(corrections)) {
-    const regex = new RegExp(`\\b${incorrect}\\b`, 'gi');
-    result = result.replace(regex, correct);
-  }
-  return result;
-};
-
-const fixPronouns = (text: string): string => {
-  let result = text;
-  result = result.replace(/\b(everyone|everybody|someone|somebody|anyone|anybody|no one|nobody)\s+(are)\b/gi, '$1 is');
-  result = result.replace(/\b(everyone|everybody|someone|somebody|anyone|anybody|no one|nobody)\s+(have)\b/gi, '$1 has');
-  result = result.replace(/\b(everyone|everybody|someone|somebody|anyone|anybody|no one|nobody)\s+(were)\b/gi, '$1 was');
-  result = result.replace(/\b(everyone|everybody|someone|somebody|anyone|anybody|no one|nobody)\s+(do)\b/gi, '$1 does');
-  return result;
-};
-
-const fixDoubleNegatives = (text: string): string => {
-  const patterns = [
-    { regex: /\b(no|not|never)\s+(nothing)\b/gi, replacement: 'anything' },
-    { regex: /\b(no|not|never)\s+(nobody)\b/gi, replacement: 'anybody' },
-    { regex: /\b(no|not|never)\s+(nowhere)\b/gi, replacement: 'anywhere' },
-    { regex: /\b(no|not|never)\s+(none)\b/gi, replacement: 'any' },
-    { regex: /\b(can't|cannot)\s+(never)\b/gi, replacement: 'can ever' },
-    { regex: /\b(won't|will not)\s+(never)\b/gi, replacement: 'will ever' },
-  ];
-  
-  let result = text;
-  for (const pattern of patterns) {
-    result = result.replace(pattern.regex, pattern.replacement);
-  }
-  return result;
-};
-
-const fixCapitalization = (text: string): string => {
-  const sentences = text.split(/(?<=[.!?])\s+/);
-  return sentences.map((s, i) => {
-    if (i === 0) return s.charAt(0).toUpperCase() + s.slice(1);
-    if (s.length > 0 && !/^(i|a|an|the|and|or|but|for|nor|on|at|to|by|in|of|with|from|up|off|down|over|under|after|before|between|among|through|throughout|since|until|while|whereas|although|though|unless|because|as|if|whether|when|where|how|why|so|then|now|thus|hence|accordingly|consequently|furthermore|moreover|additionally|however|nevertheless|nonetheless|yet|still|therefore|thence|henceforth)\b/.test(s.split(' ')[0])) {
-      return s.charAt(0).toUpperCase() + s.slice(1);
-    }
-    return s;
-  }).join(' ');
-};
-
-const fixPunctuation = (text: string): string => {
-  let result = text;
-  result = result.replace(/\s{2,}/g, ' ');
-  result = result.replace(/([.!?])([A-Za-z])/g, '$1 $2');
-  result = result.replace(/([.!?])\1+/g, '$1');
-  result = result.replace(/\s+([,.!?;:])/g, '$1');
-  result = result.replace(/([a-zA-Z])\s+([a-zA-Z])\s+and\s+([a-zA-Z])/g, '$1, $2 and $3');
-  if (result.length > 0 && !/[.!?]$/.test(result)) {
-    result = result + '.';
-  }
-  return result;
 };
