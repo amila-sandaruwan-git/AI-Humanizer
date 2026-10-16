@@ -62,11 +62,15 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
   const [fileName, setFileName] = useState<string | null>(null);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
+  // Desktop still uses collapsible sections
   const [toneOpen, setToneOpen] = useState(true);
   const [styleOpen, setStyleOpen] = useState(true);
   const [intensityOpen, setIntensityOpen] = useState(true);
 
   const resultRef = useRef<HTMLDivElement>(null);
+
+  // Swipe-down-to-close refs
+  const touchStartY = useRef<number | null>(null);
 
   const {
     value: text,
@@ -179,6 +183,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
       dismissToast(toastId);
       showSuccess('Text humanized successfully');
 
+      // Close mobile settings drawer after humanizing so user sees result
       if (isMobile) setMobileSidebarOpen(false);
 
       setTimeout(() => {
@@ -247,6 +252,24 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
     [showInfo]
   );
 
+  // Swipe-down-to-close handlers
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (touchStartY.current === null) return;
+    const deltaY = e.touches[0].clientY - touchStartY.current;
+    if (deltaY > 80) {
+      setMobileSidebarOpen(false);
+      touchStartY.current = null;
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    touchStartY.current = null;
+  }, []);
+
   const getIntensityColor = (value: number) => {
     switch (value) {
       case 1: return '#90CAF9';
@@ -267,6 +290,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
 
   const sliderValue = intensity === 'light' ? 1 : intensity === 'medium' ? 2 : 3;
 
+  // Reusable toggle group styles (used on mobile)
   const toggleGroupSx = {
     display: 'flex',
     gap: 0.5,
@@ -289,11 +313,15 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
         borderColor: isDark ? 'rgba(255,255,255,0.16)' : 'rgba(91,111,214,0.2)',
       },
       '&.Mui-selected': {
-        backgroundColor: isDark ? 'rgba(144,202,249,0.14)' : 'rgba(91,111,214,0.1)',
+        backgroundColor: isDark
+          ? 'rgba(144,202,249,0.14)'
+          : 'rgba(91,111,214,0.1)',
         color: isDark ? '#90caf9' : '#5b6fd6',
         borderColor: isDark ? 'rgba(144,202,249,0.4)' : 'rgba(91,111,214,0.4)',
         '&:hover': {
-          backgroundColor: isDark ? 'rgba(144,202,249,0.2)' : 'rgba(91,111,214,0.16)',
+          backgroundColor: isDark
+            ? 'rgba(144,202,249,0.2)'
+            : 'rgba(91,111,214,0.16)',
         },
       },
     },
@@ -315,57 +343,25 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
           backgroundColor: isDark ? '#1a1a2e' : '#ffffff',
         }}
       >
-        {/* Header — always on top, always visible */}
+        {/* Header */}
         <Box
           sx={{
             p: { xs: 1.75, sm: 2 },
-            pt: { xs: 1.75, sm: 3 },
+            pt: { xs: 2, sm: 3 },
             borderBottom: `1px solid ${
               isDark ? 'rgba(255,255,255,0.06)' : 'rgba(43,47,69,0.07)'
             }`,
             flexShrink: 0,
-            position: 'relative',
-            zIndex: 2,
-            backgroundColor: isDark ? '#1a1a2e' : '#ffffff',
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Tune sx={{ color: 'primary.main', fontSize: 20 }} />
             <Typography
               variant="subtitle1"
-              sx={{
-                fontWeight: 700,
-                fontSize: '0.9375rem',
-                color: 'text.primary',
-                flex: 1,
-              }}
+              sx={{ fontWeight: 700, fontSize: '0.9375rem', color: 'text.primary', flex: 1 }}
             >
               Settings
             </Typography>
-            {isMobile && (
-              <IconButton
-                onClick={() => setMobileSidebarOpen(false)}
-                aria-label="Close settings"
-                sx={{
-                  p: 1,
-                  minWidth: 44,
-                  minHeight: 44,
-                  borderRadius: 2,
-                  color: 'text.secondary',
-                  backgroundColor: isDark
-                    ? 'rgba(255,255,255,0.05)'
-                    : 'rgba(43,47,69,0.04)',
-                  '&:hover': {
-                    backgroundColor: isDark
-                      ? 'rgba(255,255,255,0.1)'
-                      : 'rgba(43,47,69,0.08)',
-                    color: 'text.primary',
-                  },
-                }}
-              >
-                <Close sx={{ fontSize: 22 }} />
-              </IconButton>
-            )}
           </Box>
         </Box>
 
@@ -455,9 +451,10 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
             }}
           />
 
-          {/* MOBILE: segmented controls */}
+          {/* MOBILE: Segmented control layout */}
           {isMobile ? (
             <Stack spacing={2.5}>
+              {/* TONE */}
               <Box>
                 <Typography
                   variant="caption"
@@ -496,6 +493,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
                 </ToggleButtonGroup>
               </Box>
 
+              {/* STYLE */}
               <Box>
                 <Typography
                   variant="caption"
@@ -531,6 +529,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
                 </ToggleButtonGroup>
               </Box>
 
+              {/* INTENSITY */}
               <Box>
                 <Typography
                   variant="caption"
@@ -585,8 +584,9 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
               </Box>
             </Stack>
           ) : (
+            /* DESKTOP: detailed collapsible cards */
             <>
-              {/* DESKTOP: collapsible cards */}
+              {/* TONE */}
               <Box sx={{ mb: 2 }}>
                 <Box
                   onClick={() => setToneOpen(!toneOpen)}
@@ -724,6 +724,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
                 }}
               />
 
+              {/* STYLE */}
               <Box sx={{ mb: 2 }}>
                 <Box
                   onClick={() => setStyleOpen(!styleOpen)}
@@ -860,6 +861,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
                 }}
               />
 
+              {/* INTENSITY */}
               <Box sx={{ mb: 2 }}>
                 <Box
                   onClick={() => setIntensityOpen(!intensityOpen)}
@@ -1162,7 +1164,7 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
         </Box>
       )}
 
-      {/* SIDEBAR - Mobile Drawer (simplified — no extra drag handle) */}
+      {/* SIDEBAR - Mobile Drawer (bottom sheet) */}
       {isMobile && (
         <Drawer
           anchor="bottom"
@@ -1171,20 +1173,74 @@ const Editor: React.FC<EditorProps> = ({ onHumanize }) => {
           PaperProps={{
             sx: {
               backgroundColor: isDark ? '#1a1a2e' : '#ffffff',
-              height: 'calc(100vh - 56px)',
-              maxHeight: 'calc(100vh - 56px)',
+              // Match app navbar height (64px) so close button is never clipped
+              height: 'calc(100vh - 64px)',
+              maxHeight: 'calc(100vh - 64px)',
               borderRadius: '20px 20px 0 0',
               overflow: 'hidden',
             },
           }}
           ModalProps={{ keepMounted: false }}
         >
+          {/* Drag handle + floating close button — always visible */}
+          <Box
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            sx={{
+              position: 'relative',
+              display: 'flex',
+              justifyContent: 'center',
+              pt: 1.25,
+              pb: 0.5,
+              flexShrink: 0,
+              touchAction: 'none',
+              cursor: 'grab',
+            }}
+          >
+            <Box
+              sx={{
+                width: 36,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: isDark
+                  ? 'rgba(255,255,255,0.2)'
+                  : 'rgba(43,47,69,0.2)',
+              }}
+            />
+            <IconButton
+              onClick={() => setMobileSidebarOpen(false)}
+              aria-label="Close settings"
+              sx={{
+                position: 'absolute',
+                top: 4,
+                right: 8,
+                width: 40,
+                height: 40,
+                borderRadius: 2,
+                color: isDark ? 'rgba(255,255,255,0.75)' : 'rgba(43,47,69,0.75)',
+                backgroundColor: isDark
+                  ? 'rgba(255,255,255,0.08)'
+                  : 'rgba(43,47,69,0.06)',
+                '&:hover': {
+                  backgroundColor: isDark
+                    ? 'rgba(255,255,255,0.15)'
+                    : 'rgba(43,47,69,0.12)',
+                  color: isDark ? '#ffffff' : '#2b2f45',
+                },
+                zIndex: 2,
+              }}
+            >
+              <Close sx={{ fontSize: 20 }} />
+            </IconButton>
+          </Box>
           {sidebarContent}
         </Drawer>
       )}
 
       {/* MAIN CONTENT */}
       <Box sx={{ flex: 1, minWidth: 0, width: '100%' }}>
+        {/* Main Header */}
         <Box
           sx={{
             display: 'flex',
